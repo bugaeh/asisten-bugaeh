@@ -1,0 +1,20 @@
+MODUL PEMBELAJARAN FISIKA
+BAB: HUKUM-HUKUM GERAK NEWTON
+
+1. Hukum I Newton (Hukum Kelembaman / Inersia)
+Menyatakan bahwa jika resultan gaya yang bekerja pada benda sama dengan nol, maka benda yang awalnya diam akan tetap diam, dan benda yang awalnya bergerak lurus beraturan akan tetap bergerak dengan kecepatan konstan (Sigma F = 0).
+Contoh: Penumpang terdorong ke depan saat bus yang melaju tiba-tiba direm.
+
+2. Hukum II Newton
+Menyatakan bahwa percepatan yang dialami oleh suatu benda berbanding lurus dengan resultan gaya yang bekerja padanya dan berbanding terbalik dengan massa bendanya.
+Rumus matematis: Sigma F = m x a
+Keterangan:
+- Sigma F: Resultan gaya (Newton)
+- m: Massa benda (kg)
+- a: Percepatan (m/s^2)
+Contoh soal: Sebuah balok bermassa 5 kg ditarik dengan gaya horizontal 20 Newton di atas lantai licin. Maka percepatannya adalah a = F / m = 20 / 5 = 4 m/s^2.
+
+3. Hukum III Newton (Hukum Aksi-Reaksi)
+Menyatakan bahwa jika benda A memberikan gaya pada benda B (gaya aksi), maka benda B akan memberikan gaya yang sama besar namun berlawanan arah pada benda A (gaya reaksi).
+Rumus: F_aksi = - F_reaksi.
+Contoh: Dorongan gas roket ke bawah menghasilkan gaya dorong roket bergerak meluncur ke atas.

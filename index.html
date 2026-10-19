@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asisten Belajar Offline - AI Chatbot & Generator Kuis</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Hidden File Input Dialogs -->
+  <input type="file" id="fileInputMulti" multiple accept=".pdf,.docx,.txt,.md,.pptx,.csv,.html,.htm" style="display: none;">
+  <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+
+  <!-- Outer Window Container -->
+  <div class="window-container">
+
+    <!-- Top macOS Style Window Chrome Bar -->
+    <header class="window-header">
+      <div class="window-controls">
+        <span class="control-dot dot-red" title="Tutup"></span>
+        <span class="control-dot dot-yellow" title="Minimalkan"></span>
+        <span class="control-dot dot-green" title="Maksimalkan"></span>
+      </div>
+      <div class="window-address-bar" title="Lokasi Dokumen Lokal Offline">
+        <span class="status-indicator"></span>
+        file:///C:/BahanP13/asisten_belajar.html
+      </div>
+    </header>
+
+    <!-- Main Workspace Area -->
+    <div class="app-body">
+
+      <!-- ============================================================
+           Left Sidebar: Modules & Ingestion Management
+           ============================================================ -->
+      <aside class="sidebar">
+        <!-- Sidebar Header with dynamic count -->
+        <div class="sidebar-header">
+          <span class="sidebar-title" id="moduleCountText">10 MODUL TERSEDIA</span>
+          <span class="sidebar-count-badge" id="offlineBadge">OFFLINE</span>
+        </div>
+
+        <!-- Sidebar Upload & Action Controls -->
+        <div class="sidebar-actions">
+          <div class="btn-upload-group">
+            <button class="btn-sidebar btn-sidebar-primary" id="btnUploadFiles" title="Pilih banyak file sekaligus dari folder komputer mana pun">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Upload Materi
+            </button>
+            <button class="btn-sidebar" id="btnUploadFolder" title="Pilih satu folder penuh sekaligus">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              Pilih Folder
+            </button>
+          </div>
+
+          <!-- Drag and Drop Area -->
+          <div class="sidebar-dropzone" id="sidebarDropzone" title="Seret file ke sini">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v10m0 0l3-3m-3 3l-3-3M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.877a2 2 0 0 0 1.94-1.515L22 17"></path>
+            </svg>
+            Tarik & lepas file (PDF, DOCX, TXT, PPTX, CSV)
+          </div>
+
+          <div class="btn-upload-group">
+            <button class="btn-sidebar" id="btnAddModule" title="Tambah modul manual baru">
+              ➕ Tambah Modul
+            </button>
+            <button class="btn-sidebar" id="btnManageFiles" title="Lihat status pemrosesan dan format berkas">
+              📊 Status Berkas
+            </button>
+          </div>
+        </div>
+
+        <!-- Scrollable Module List (Screenshot 1 Match) -->
+        <ul class="sidebar-module-list" id="moduleList">
+          <!-- Populated dynamically by app.js -->
+        </ul>
+
+        <!-- Sidebar Footer Status -->
+        <div class="sidebar-footer">
+          <span id="sidebarStatusSummary">IndexedDB Aktif • Offline</span>
+          <span class="footer-link" onclick="openModal('modalInfoWorkflow')">Bantuan & Info</span>
+        </div>
+      </aside>
+
+      <!-- ============================================================
+           Right Main Content Area
+           ============================================================ -->
+      <main class="main-content">
+
+        <!-- Top Tab Navigation -->
+        <nav class="tab-header">
+          <div class="tab-nav-left">
+            <button class="tab-button active" id="tabBtnChat">
+              <span class="tab-icon-chat">💬</span>
+              AI Chatbot
+            </button>
+            <button class="tab-button" id="tabBtnQuiz">
+              <span class="tab-icon-quiz">?</span>
+              Generator Kuis
+            </button>
+          </div>
+
+          <div class="tab-nav-right">
+            <div class="active-module-pill" id="activeModulePill">
+              Modul Aktif: <strong>Modul_02_Biologi...</strong>
+            </div>
+            <button class="btn-header-info" id="btnOpenApiSettings" title="Konfigurasi API Model AI (Gemini / OpenAI)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+              Pengaturan API
+              <span class="api-status-dot" id="headerApiStatusDot" title="Status API"></span>
+            </button>
+            <button class="btn-header-info" id="btnSystemInfo" title="Alur Kerja & Perumusan Prompt Mandiri">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              Alur Kerja AI
+            </button>
+          </div>
+        </nav>
+
+        <!-- ============================================================
+             VIEW 1: AI Chatbot (Matches Screenshot 1)
+             ============================================================ -->
+        <section class="chat-view" id="chatView">
+          <!-- Chat Message Log -->
+          <div class="chat-history" id="chatHistory">
+            <!-- Messages injected dynamically with initial sample conversation -->
+          </div>
+
+          <!-- Quick Query Suggestions Bar -->
+          <div class="chat-quick-suggestions" id="quickChipsContainer">
+            <!-- Chips generated dynamically based on active module -->
+          </div>
+
+          <!-- Bottom Input Bar -->
+          <footer class="chat-input-bar">
+            <input 
+              type="text" 
+              class="chat-input-field" 
+              id="chatInput" 
+              placeholder="Ketik pertanyaanmu mengenai modul ini..."
+              value="Apa itu renin dan apa bedanya dengan pepsin?"
+            >
+            <button class="btn-chat-action" id="btnSendChat">Kirim</button>
+            <button class="btn-chat-action" id="btnSummarize">Rangkum</button>
+          </footer>
+        </section>
+
+        <!-- ============================================================
+             VIEW 2: Generator Kuis (Matches Screenshot 2)
+             ============================================================ -->
+        <!-- ============================================================
+             VIEW 2: Generator Kuis Berbasis AI (Screenshot 2 Match + Generator Lengkap)
+             ============================================================ -->
+        <section class="quiz-view" id="quizView" style="display: none;">
+          <!-- Quiz Setup Toolbar (Configurable Modul Sumber, Jumlah, Kesulitan, Tipe) -->
+          <div class="quiz-setup-toolbar" id="quizSetupToolbar">
+            <div class="quiz-setup-row">
+              <div class="quiz-setup-field">
+                <label for="quizSourceModule" class="quiz-setup-label">📚 Modul Sumber:</label>
+                <select id="quizSourceModule" class="quiz-setup-select">
+                  <!-- Populated dynamically with all modules -->
+                </select>
+              </div>
+              <div class="quiz-setup-field">
+                <label for="quizCount" class="quiz-setup-label">🔢 Jumlah Soal:</label>
+                <select id="quizCount" class="quiz-setup-select">
+                  <option value="3">3 Soal (Kilat)</option>
+                  <option value="5" selected>5 Soal (Standar)</option>
+                  <option value="10">10 Soal (Lengkap)</option>
+                  <option value="15">15 Soal (Ujian)</option>
+                </select>
+              </div>
+              <div class="quiz-setup-field">
+                <label for="quizDifficulty" class="quiz-setup-label">⚡ Tingkat Kesulitan:</label>
+                <select id="quizDifficulty" class="quiz-setup-select">
+                  <option value="mudah">Mudah (Dasar & Istilah)</option>
+                  <option value="sedang" selected>Sedang (Konsep & Proses)</option>
+                  <option value="sulit">Sulit (Analisis & Kasus)</option>
+                </select>
+              </div>
+              <div class="quiz-setup-field">
+                <label for="quizType" class="quiz-setup-label">📋 Jenis Soal:</label>
+                <select id="quizType" class="quiz-setup-select">
+                  <option value="mcq" selected>Pilihan Ganda (A-D)</option>
+                  <option value="tf">Benar / Salah</option>
+                  <option value="mixed">Campuran (MCQ + B/S)</option>
+                </select>
+              </div>
+            </div>
+            <div class="quiz-setup-actions">
+              <button class="btn-quiz-action secondary" id="btnViewQuizHistory" title="Buka catatan riwayat hasil pengerjaan kuis">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Riwayat Kuis
+              </button>
+              <button class="btn-quiz-action primary" id="btnGenerateQuiz" title="Hasilkan soal kuis otomatis dari teks modul yang dipilih">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Generate Kuis AI
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Question Container (Visible during active quiz) -->
+          <div id="quizActiveContainer">
+            <!-- Question Number Jump Grid -->
+            <div class="quiz-jump-bar" id="quizJumpBar">
+              <span class="quiz-jump-label">Navigasi Soal:</span>
+              <div class="quiz-jump-grid" id="quizJumpGrid">
+                <!-- Injected dynamically: pills 1..N -->
+              </div>
+            </div>
+
+            <!-- Quiz Top Info Bar (Matches Screenshot 2) -->
+            <div class="quiz-top-info">
+              <span class="quiz-progress-text" id="quizProgressText">Soal 3 dari 5 • Modul_02_Biologi</span>
+              <span class="quiz-score-badge" id="quizScoreBadge">Skor: 2/2</span>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="quiz-progress-track">
+              <div class="quiz-progress-bar" id="quizProgressBar" style="width: 60%;"></div>
+            </div>
+
+            <!-- Question Box with Metadata & Source Citation -->
+            <div class="quiz-question-box">
+              <div class="quiz-question-meta" id="quizQuestionMeta">
+                <span class="quiz-meta-tag difficulty" id="quizMetaDifficulty">Sedang</span>
+                <span class="quiz-meta-tag type" id="quizMetaType">Pilihan Ganda</span>
+                <span class="quiz-meta-ref" id="quizQuestionRef">📖 Modul_02_Biologi - Bab 4, Hal. 14</span>
+              </div>
+              <h2 class="quiz-question-text" id="quizQuestionText">
+                Organ manakah yang menghasilkan enzim lipase, amilase, dan tripsin untuk pencernaan di usus halus?
+              </h2>
+            </div>
+
+            <!-- Options List (A, B, C, D cards) -->
+            <div class="quiz-options-list" id="quizOptionsList">
+              <!-- Option pills rendered dynamically by app.js -->
+            </div>
+
+            <!-- Feedback Box at Bottom (Matches Screenshot 2) -->
+            <div class="quiz-feedback-box" id="quizFeedbackBox">
+              <div class="quiz-feedback-text" id="quizFeedbackText">
+                <span class="quiz-feedback-score-num">2</span> dari 2 soal benar sejauh ini. Jawaban benar: <strong>Pankreas</strong>. Lanjut ke soal 4.
+              </div>
+            </div>
+
+            <!-- Quiz Navigation Actions (Prev, Restart, Next, Finish) -->
+            <div class="quiz-actions-bar">
+              <button class="btn-quiz-nav" id="btnQuizPrev">← Soal Sebelumnya</button>
+              <div class="quiz-actions-spacer"></div>
+              <button class="btn-quiz-secondary" id="btnQuizRestart">Mulai Ulang Kuis</button>
+              <button class="btn-quiz-next" id="btnQuizNext">Soal Selanjutnya →</button>
+              <button class="btn-quiz-finish" id="btnQuizFinish" style="display: none;">🏁 Selesai & Pembahasan</button>
+            </div>
+          </div>
+
+          <!-- Final Results & Discussion Container (Shown after completion) -->
+          <div class="quiz-results-container" id="quizResultsContainer" style="display: none;">
+            <div class="quiz-results-card">
+              <div class="quiz-results-header">
+                <div class="quiz-results-trophy">🏆</div>
+                <h2 class="quiz-results-title">Kuis Pembelajaran Selesai!</h2>
+                <p class="quiz-results-subtitle" id="quizResultsSubtitle">Penilaian otomatis dan analisis pemahaman materi dokumen.</p>
+              </div>
+
+              <div class="quiz-score-showcase">
+                <div class="quiz-score-circle" id="quizScoreCircle">
+                  <span class="quiz-score-num" id="quizScorePercent">80%</span>
+                  <span class="quiz-score-label">Akurasi</span>
+                </div>
+                <div class="quiz-stats-grid">
+                  <div class="quiz-stat-item">
+                    <span class="stat-value" id="statCorrectCount">4 / 5</span>
+                    <span class="stat-label">Jawaban Tepat</span>
+                  </div>
+                  <div class="quiz-stat-item">
+                    <span class="stat-value" id="statDifficulty">Sedang</span>
+                    <span class="stat-label">Tingkat Kesulitan</span>
+                  </div>
+                  <div class="quiz-stat-item">
+                    <span class="stat-value" id="statSourceMod">Modul_02_Biologi</span>
+                    <span class="stat-label">Modul Sumber</span>
+                  </div>
+                  <div class="quiz-stat-item">
+                    <span class="stat-value" id="statQuestionType">Pilihan Ganda</span>
+                    <span class="stat-label">Format Soal</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="quiz-evaluation-box" id="quizEvaluationBox">
+                <!-- Qualitative evaluation & study advice -->
+              </div>
+
+              <div class="quiz-results-actions">
+                <button class="btn-quiz-action primary" id="btnRegenerateQuiz">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                  Buat Ulang Soal AI Baru
+                </button>
+                <button class="btn-quiz-action secondary" id="btnRetryCurrentQuiz">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6m16 10v-6h-6m-1.5-7.5A9 9 0 1021.5 12"/></svg>
+                  Coba Lagi Kuis Ini
+                </button>
+                <button class="btn-quiz-action outline" id="btnResultsViewHistory">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  Lihat Riwayat Kuis
+                </button>
+              </div>
+            </div>
+
+            <!-- Detailed Review and Pembahasan -->
+            <div class="quiz-review-section">
+              <h3 class="quiz-review-title">📋 Pembahasan & Kunci Jawaban Lengkap</h3>
+              <div class="quiz-review-list" id="quizReviewList">
+                <!-- Injected question-by-question review items -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: Manajemen Berkas & Status Pemrosesan
+       ============================================================ -->
+  <div class="modal-overlay" id="modalFiles">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📊 Status Berkas & Pemrosesan Materi</h3>
+        <button class="modal-close-btn" onclick="closeModal('modalFiles')">&times;</button>
+      </div>
+      <div class="modal-content">
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 14px;">
+          Daftar seluruh materi belajar yang telah diimpor dan diekstrak ke dalam memori peramban (IndexedDB).
+        </p>
+        <div style="overflow-x: auto;">
+          <table class="file-table">
+            <thead>
+              <tr>
+                <th>Nama Dokumen</th>
+                <th>Format</th>
+                <th>Ukuran</th>
+                <th>Status Pemrosesan</th>
+                <th>Hasil Ekstraksi</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="filesTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sidebar" onclick="closeModal('modalFiles')">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: Tambah Modul Manual
+       ============================================================ -->
+  <div class="modal-overlay" id="modalNewModule">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3>➕ Tambah Modul Pembelajaran Baru</h3>
+        <button class="modal-close-btn" onclick="closeModal('modalNewModule')">&times;</button>
+      </div>
+      <div class="modal-content">
+        <div class="form-group">
+          <label class="form-label">Nama / Judul Modul:</label>
+          <input type="text" class="form-input" id="newModuleTitle" placeholder="Misal: Modul_11_Kewirausahaan">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Isi Materi Pembelajaran (Teks/Ringkasan):</label>
+          <textarea class="form-textarea" id="newModuleContent" placeholder="Tempelkan atau ketik materi belajar di sini agar dapat diproses oleh AI Asisten..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sidebar" onclick="closeModal('modalNewModule')">Batal</button>
+        <button class="btn-sidebar btn-sidebar-primary" id="btnSaveNewModule">Simpan Modul</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: Alur Kerja & Perumusan Prompt Mandiri
+       ============================================================ -->
+  <div class="modal-overlay" id="modalInfoWorkflow">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>💡 Alur Kerja Aplikasi & Perumusan Prompt Mandiri</h3>
+        <button class="modal-close-btn" onclick="closeModal('modalInfoWorkflow')">&times;</button>
+      </div>
+      <div class="modal-content" style="line-height: 1.6; font-size: 13.5px; color: #334155;">
+        <h4 style="color: #0f766e; margin-bottom: 6px;">1. Pemuatan Materi dari Folder Asisten Bugaeh</h4>
+        <p style="margin-bottom: 12px;">
+          Aplikasi membaca modul pembelajaran langsung dari folder <code>Koleksi_Modul_P13</code> (10 modul kurikulum lengkap dari Biologi, Sejarah, Fisika, Kimia, Kalkulus, dsb.). Anda juga dapat memilih file atau folder apa pun di komputer Anda menggunakan tombol <strong>Upload Materi</strong> dan <strong>Pilih Folder</strong>.
+        </p>
+
+        <h4 style="color: #0f766e; margin-bottom: 6px;">2. Ekstraksi Dokumen Multi-Format Secara Offline</h4>
+        <p style="margin-bottom: 12px;">
+          Didukung pembacaan format <strong>PDF</strong> (via PDF.js), <strong>DOCX</strong> & <strong>PPTX</strong> (via XML parser di JSZip), <strong>TXT</strong>, <strong>MD</strong>, <strong>CSV</strong>, dan <strong>HTML</strong>. Dokumen diekstrak langsung di dalam browser tanpa mengirim berkas ke server mana pun (100% aman dan bekerja saat tidak ada internet).
+        </p>
+
+        <h4 style="color: #0f766e; margin-bottom: 6px;">3. Penyimpanan Persisten IndexedDB</h4>
+        <p style="margin-bottom: 12px;">
+          Setiap modul yang diunggah atau diedit otomatis tersimpan dalam basis data lokal browser <code>AsistenBelajarDB</code>, sehingga materi tetap utuh dan langsung tersedia ketika aplikasi dibuka kembali di masa depan.
+        </p>
+
+        <h4 style="color: #0f766e; margin-bottom: 6px;">4. Asisten AI Serbaguna: Pengetahuan Luas & Referensi Dokumen</h4>
+        <p style="margin-bottom: 12px;">
+          AI Assistant tidak membatasi diri hanya pada berkas yang diunggah. Dokumen berfungsi sebagai referensi pendukung ketika relevan (dilengkapi kutipan presisi bab & halaman). Selain itu, AI dapat menjawab pertanyaan umum, menulis kode pemrograman (JavaScript, Python, HTML/CSS), menyusun draf email/puisi, menerjemahkan bahasa, serta membedakan secara transparan antara informasi bersumber dari dokumen dan pengetahuan umum.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sidebar btn-sidebar-primary" onclick="closeModal('modalInfoWorkflow')">Tutup & Mulai Belajar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: Pengaturan API Model AI (Tersimpan Aman di Backend)
+       ============================================================ -->
+  <div class="modal-overlay" id="modalApiConfig">
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3>⚙️ Pengaturan API Model AI</h3>
+        <button class="modal-close-btn" onclick="closeModal('modalApiConfig')">&times;</button>
+      </div>
+      <div class="modal-content">
+        <div class="api-security-notice">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div>
+            <strong>Penyimpanan Aman di Sisi Backend:</strong><br>
+            API Key disimpan secara aman di backend server lokal dan <em>tidak pernah diekspos</em> ke peramban atau berkas frontend.
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label" for="apiProvider">Penyedia Model AI (Provider):</label>
+          <select class="form-input" id="apiProvider">
+            <option value="gemini" selected>Google Gemini (Rekomendasi: Cepat & Presisi)</option>
+            <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
+            <option value="custom">Kustom / OpenAI-Compatible (Groq, DeepSeek, Ollama, OpenRouter)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="apiKeyInput">
+            API Key: 
+            <span id="apiKeyStatusText" style="font-weight: normal; font-size: 12px; color: #64748b;">(Memeriksa backend...)</span>
+          </label>
+          <div style="display: flex; gap: 8px;">
+            <input type="password" class="form-input" id="apiKeyInput" placeholder="Masukkan API Key (cth: AIzaSy... atau sk-...)">
+            <button class="btn-sidebar" id="btnToggleApiKeyVisibility" type="button" style="padding: 0 12px;" title="Tampilkan/Sembunyikan">👁️</button>
+          </div>
+          <small style="color: #64748b; font-size: 11.5px; margin-top: 4px; display: block;">
+            Kunci akan disimpan di backend server. Jika sudah tersimpan, kosongkan kolom ini bila hanya ingin mengubah model.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="apiModelInput">Nama Model:</label>
+          <input type="text" class="form-input" id="apiModelInput" value="gemini-1.5-flash" placeholder="Contoh: gemini-1.5-flash, gemini-2.0-flash, gpt-4o-mini">
+        </div>
+
+        <div class="form-group" id="groupBaseUrl" style="display: none;">
+          <label class="form-label" for="apiBaseUrlInput">Base URL (Opsional untuk Kustom / Lokal):</label>
+          <input type="text" class="form-input" id="apiBaseUrlInput" placeholder="Contoh: https://api.groq.com/openai/v1 atau http://localhost:11434/v1">
+        </div>
+
+        <div class="api-test-feedback" id="apiTestFeedback" style="display: none;"></div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn-sidebar" id="btnTestApiConnection" type="button">
+          🔌 Uji Koneksi API
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-sidebar" onclick="closeModal('modalApiConfig')" type="button">Tutup</button>
+          <button class="btn-sidebar btn-sidebar-primary" id="btnSaveApiConfig" type="button">
+            💾 Simpan Konfigurasi
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: Riwayat Hasil Kuis Pembelajaran (IndexedDB)
+       ============================================================ -->
+  <div class="modal-overlay" id="modalQuizHistory">
+    <div class="modal-card" style="max-width: 820px;">
+      <div class="modal-header">
+        <h3>📜 Riwayat Hasil Kuis Pembelajaran</h3>
+        <button class="modal-close-btn" onclick="closeModal('modalQuizHistory')">&times;</button>
+      </div>
+      <div class="modal-content">
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 14px;">
+          Catatan riwayat evaluasi dan skor kuis yang tersimpan di basis data lokal peramban (IndexedDB).
+        </p>
+        <div style="overflow-x: auto; max-height: 380px;">
+          <table class="file-table" id="quizHistoryTable">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Modul Sumber</th>
+                <th>Kesulitan</th>
+                <th>Tipe Soal</th>
+                <th>Skor</th>
+                <th>Persentase</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="quizHistoryTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+        <div id="quizHistoryEmptyState" style="display: none; text-align: center; padding: 36px 16px; color: #94a3b8;">
+          <div style="font-size: 32px; margin-bottom: 8px;">📑</div>
+          <p>Belum ada riwayat kuis tersimpan. Kerjakan kuis untuk merekam kemajuan belajar Anda.</p>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn-sidebar" id="btnClearQuizHistory" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;">
+          Hapus Semua Riwayat
+        </button>
+        <button class="btn-sidebar" onclick="closeModal('modalQuizHistory')">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Local Offline Scripts -->
+  <script src="lib/jszip.min.js"></script>
+  <script src="lib/pdf.min.js"></script>
+  <script src="default_modules.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
