@@ -129,6 +129,8 @@ class ModuleDB {
    2. Application State & Orchestrator
    ========================================================================== */
 const AppState = {
+  userName: (typeof localStorage !== 'undefined' && localStorage.getItem('asisten_user_name')) || '',
+  customInstructions: [],
   modules: [],
   activeModuleId: 'modul_02',
   currentTab: 'chat', // 'chat' or 'quiz'
@@ -363,6 +365,11 @@ class DocumentParser {
 class AutonomousLearningAI {
   // Conversation memory for context awareness across turns
   static contextMemory = {
+    userName: (typeof localStorage !== 'undefined' && localStorage.getItem('asisten_user_name')) || '',
+    customInstructions: [],
+    customNotes: [],
+    languagePreference: 'id',
+    tone: 'normal',
     lastQuery: '',
     lastTopic: 'Sistem Pencernaan (HCl, Pepsin, Renin)',
     lastAnswer: 'Asam klorida (HCl) diproduksi sel parietal lambung. Fungsinya: (1) mengaktifkan pepsinogen menjadi pepsin, (2) membunuh bakteri patogen, (3) menciptakan pH asam untuk kerja enzim. Pepsin sendiri berfungsi memecah protein menjadi polipeptida melalui hidrolisis ikatan peptida.',
@@ -373,59 +380,196 @@ class AutonomousLearningAI {
 
   /**
    * Main Dispatcher: Direct, Versatile AI Assistant
+   * Following Principles:
+   * 1. Pahami maksud utama terlebih dahulu
+   * 2. Jangan terpaku pada modul
+   * 3. Utamakan relevansi daripada keterikatan pada konteks
+   * 4. Berpikir secara mandiri dan menyeluruh
+   * 5. Bedakan instruksi, referensi, dan tujuan (ikuti instruksi pengguna seperti "panggil saya Joe")
+   * 6. Jangan memaksakan hubungan yang tidak ada
+   * 7. Tangani ambiguitas secara wajar
+   * 8. Sesuaikan jawaban dengan kebutuhan
+   * 9. Jaga akurasi dan batasan
    */
   static respond(query, moduleData) {
     const qTrimmed = query.trim();
     const qLower = qTrimmed.toLowerCase();
     const mem = this.contextMemory;
     const modTitle = moduleData ? (moduleData.name || moduleData.filename || 'Modul Pembelajaran') : 'Modul';
+    const asksForSource = /\b(sumber|referensi|dari modul apa|halaman berapa|bab berapa|dari mana|ada di halaman|rujukan)\b/i.test(qLower);
 
-    // 1. Social Greetings (Warm, direct, no lecture)
+    // 0. User Direct Instructions & Preferences (Principle 5: Instruksi wajib dipatuhi)
+    // A. Name Setting: "panggil saya joe", "nama saya joe", "namaku joe", "call me joe", dll.
+    const namePattern = /^(?:tolong\s+|bisa\s+)?(?:panggil\s+(?:saya|aku)|nama\s+(?:saya|ku)\s+adalah|nama\s+(?:saya|ku)|namaku\s+adalah|namaku|sebut\s+(?:saya|aku)|call\s+me|my\s+name\s+is)\s+([a-zA-Z0-9_\-\s]+)/i;
+    const nameMatch = qTrimmed.match(namePattern);
+    if (nameMatch) {
+      let rawName = nameMatch[1].trim();
+      rawName = rawName.replace(/[.,!?;:]+$/g, '').trim();
+      rawName = rawName.replace(/\b(ya|aja|saja|dong|oke|deh|nih|bang|mas|kak)\b/gi, '').trim();
+      if (rawName.length > 0) {
+        const formattedName = rawName.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        mem.userName = formattedName;
+        if (typeof AppState !== 'undefined') AppState.userName = formattedName;
+        try { localStorage.setItem('asisten_user_name', formattedName); } catch (e) {}
+
+        const reply = `Siap, ${formattedName}!`;
+        mem.lastQuery = query;
+        mem.lastAnswer = reply;
+        mem.lastSourceType = 'general';
+        return { answer: reply, source: null };
+      }
+    }
+
+    // B. Inquiring User's Name / Identity
+    if ((qLower.includes('nama saya') || qLower.includes('namaku') || qLower.includes('panggilan saya') || qLower.includes('who am i')) &&
+        (qLower.includes('siapa') || qLower.includes('tahu') || qLower.includes('ingat') || qLower.includes('apa'))) {
+      if (mem.userName) {
+        return {
+          answer: `Nama Anda adalah **${mem.userName}**.`,
+          source: null
+        };
+      } else {
+        return {
+          answer: `Anda belum memberitahukan nama Anda. Anda dapat mengatakan misalnya "Panggil saya Joe".`,
+          source: null
+        };
+      }
+    }
+
+    // C. Reset / Forget Name
+    if (qLower.includes('lupakan nama saya') || qLower.includes('hapus nama saya') || qLower === 'reset nama') {
+      mem.userName = '';
+      if (typeof AppState !== 'undefined') AppState.userName = '';
+      try { localStorage.removeItem('asisten_user_name'); } catch (e) {}
+      return { answer: 'Baik, nama panggilan Anda telah dihapus.', source: null };
+    }
+
+    // D. Temporal & Calendar Queries ("hari ini tanggal berapa", "jam berapa sekarang", dsb)
+    if (
+      qLower.includes('hari ini tanggal') ||
+      qLower.includes('tanggal berapa') ||
+      qLower.includes('sekarang tanggal') ||
+      qLower.includes('hari apa sekarang') ||
+      qLower.includes('hari ini hari apa') ||
+      qLower.includes('jam berapa sekarang') ||
+      qLower.includes('sekarang jam berapa') ||
+      qLower.includes('pukul berapa') ||
+      qLower.includes('what date is today') ||
+      qLower.includes('what time is it') ||
+      qLower.includes('current date')
+    ) {
+      const now = new Date();
+      const hariList = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const bulanList = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const hari = hariList[now.getDay()];
+      const tgl = now.getDate();
+      const bln = bulanList[now.getMonth()];
+      const thn = now.getFullYear();
+      const jam = String(now.getHours()).padStart(2, '0');
+      const mnt = String(now.getMinutes()).padStart(2, '0');
+
+      let dateReply = '';
+      if (qLower.includes('jam') || qLower.includes('pukul') || qLower.includes('time')) {
+        dateReply = `Saat ini pukul ${jam}:${mnt}.`;
+      } else {
+        dateReply = `Hari ini tanggal ${tgl} ${bln} ${thn}.`;
+      }
+      return { answer: dateReply, source: null };
+    }
+
+    // E. Custom instructions / preferences (Language, Tone, Custom Notes)
+    if (qLower.includes('bahasa inggris') && (qLower.includes('gunakan') || qLower.includes('jawab dengan') || qLower.includes('mulai sekarang'))) {
+      mem.languagePreference = 'en';
+      const nameStr = mem.userName ? ` ${mem.userName}` : '';
+      return { answer: `Understood${nameStr}! I will communicate in English from now on.`, source: null };
+    }
+    if (qLower.includes('bahasa indonesia') && (qLower.includes('gunakan') || qLower.includes('jawab dengan') || qLower.includes('kembali'))) {
+      mem.languagePreference = 'id';
+      const nameStr = mem.userName ? ` ${mem.userName}` : '';
+      return { answer: `Baik${nameStr}, saya kembali menggunakan Bahasa Indonesia.`, source: null };
+    }
+    if (qLower.includes('bahasa santai') || qLower.includes('gaya santai') || qLower.includes('santai aja')) {
+      mem.tone = 'casual';
+      const nameStr = mem.userName ? ` ${mem.userName}` : '';
+      return { answer: `Siap${nameStr}, kita ngobrol santai ya.`, source: null };
+    }
+    if (qLower.includes('bahasa formal') || qLower.includes('gaya formal') || qLower.includes('secara resmi')) {
+      mem.tone = 'formal';
+      const nameStr = mem.userName ? ` ${mem.userName}` : '';
+      return { answer: `Baik${nameStr}, saya akan menggunakan gaya bahasa formal dan terstruktur.`, source: null };
+    }
+    const noteMatch = qTrimmed.match(/^(?:ingat\s+bahwa|catat\s+bahwa|tolong\s+ingat)\s+(.+)/i);
+    if (noteMatch) {
+      const note = noteMatch[1].trim();
+      mem.customNotes.push(note);
+      return { answer: `Catatan disimpan: "${note}".`, source: null };
+    }
+
+    // F. Direct Inquiry About Source / Reference (Rule 3: Tampilkan informasi sumber hanya jika pengguna secara khusus memintanya)
+    if (qLower.includes('sumber') || qLower.includes('referensi') || qLower.includes('dari modul apa') || qLower.includes('dari mana') || qLower.includes('halaman berapa') || qLower.includes('bab berapa')) {
+      if (qLower.split(/\s+/).length <= 8 && (qLower.includes('sumber') || qLower.includes('referensi') || qLower.includes('dari mana') || qLower.includes('dari modul') || qLower.includes('halaman') || qLower.includes('bab'))) {
+        if (mem.lastSourceType === 'document' && moduleData) {
+          return {
+            answer: `Informasi mengenai "${mem.lastTopic || 'topik tersebut'}" merujuk pada dokumen "${modTitle}".`,
+            source: `${modTitle}`
+          };
+        } else {
+          return {
+            answer: `Informasi mengenai "${mem.lastTopic || 'topik tersebut'}" bersumber dari pengetahuan umum.`,
+            source: 'Pengetahuan Umum'
+          };
+        }
+      }
+    }
+
+    // 1. Social Greetings (Warm, direct, personalized)
     const greetingRegex = /^(halo|hai|hei|helo|hi|hello|hey|assalamu'?alaikum|selamat (pagi|siang|sore|malam)|apa kabar|salam)\b/i;
     if (greetingRegex.test(qLower) && qTrimmed.split(/\s+/).length <= 4) {
       const isEnglish = /^(hi|hello|hey|good (morning|afternoon|evening))\b/i.test(qLower);
+      const namePart = mem.userName ? ` ${mem.userName}` : '';
       const greetingAns = isEnglish
-        ? "Hello! How can I help you today?"
-        : "Halo! Ada yang bisa saya bantu hari ini?";
+        ? `Hello${namePart}! How can I help you today?`
+        : `Halo${namePart}! Ada yang bisa saya bantu?`;
       return { answer: greetingAns, source: null };
     }
 
-    // 2. Identity Queries (Direct, honest, concise)
+    // 2. Identity Queries (Direct, concise, personalized)
     if (qLower.includes('siapa kamu') || qLower.includes('kamu siapa') || qLower.includes('tentang kamu') || qLower.includes('identitasmu') || qLower.includes('who are you')) {
       const isEnglish = qLower.includes('who are you');
+      const namePart = mem.userName ? `, ${mem.userName}` : '';
       const identityAns = isEnglish
-        ? "I am your versatile AI Assistant, ready to answer questions, explain concepts, write code, assist with writing, and help analyze reference documents."
-        : "Saya adalah AI Assistant serbaguna yang siap menjawab berbagai pertanyaan umum, membantu menulis dan memprogram kode, menjelaskan konsep, serta menganalisis dokumen referensi yang Anda unggah.";
+        ? `I am your versatile AI Assistant${namePart}, ready to help answer questions, explain concepts, write code, and analyze reference materials.`
+        : `Saya adalah asisten AI yang siap membantu menjawab pertanyaan, menjelaskan konsep, membuat kode program, serta mendampingi belajar Anda${namePart}.`;
       return { answer: identityAns, source: null };
     }
 
     // 3. Follow-up Context Inquiries ('jelaskan lagi', 'beri contoh', 'buat lebih singkat')
     const isFollowUp = this.checkIfFollowUp(qLower);
     if (isFollowUp) {
-      return this.handleFollowUp(isFollowUp, mem, modTitle);
+      return this.handleFollowUp(isFollowUp, mem, modTitle, asksForSource);
     }
 
-    // 4. Code Generation & Programming (Strictly programming keywords, not general word 'fungsi')
+    // 4. Code Generation & Programming
     if (this.isCodingQuery(qLower)) {
       const codeResult = this.generateCodeAssistance(query, qLower);
       mem.lastQuery = query;
       mem.lastTopic = codeResult.topic || 'Pemrograman';
       mem.lastAnswer = codeResult.answer;
       mem.lastSourceType = 'general';
-      return { answer: codeResult.answer, source: 'Pengetahuan Umum AI (Pemrograman)' };
+      return { answer: codeResult.answer, source: asksForSource ? 'Pemrograman' : null };
     }
 
-    // 5. Creative Writing & Formal Drafting (Direct outputs)
+    // 5. Creative Writing & Formal Drafting
     if (this.isWritingQuery(qLower)) {
       const writingResult = this.generateWritingAssistance(query, qLower);
       mem.lastQuery = query;
       mem.lastTopic = writingResult.topic || 'Penulisan';
       mem.lastAnswer = writingResult.answer;
       mem.lastSourceType = 'general';
-      return { answer: writingResult.answer, source: 'Pengetahuan Umum AI' };
+      return { answer: writingResult.answer, source: asksForSource ? 'Penulisan' : null };
     }
 
-    // 6. Translation (Direct output)
+    // 6. Translation
     if (this.isTranslationQuery(qLower)) {
       const transResult = this.generateTranslation(query, qLower);
       mem.lastQuery = query;
@@ -438,6 +582,61 @@ class AutonomousLearningAI {
     // 7. Strict Document Check ('hanya dari file' / 'hanya dari dokumen')
     const isStrictDocOnly = qLower.includes('hanya dari file') || qLower.includes('hanya dari dokumen') || qLower.includes('hanya berdasarkan dokumen');
 
+    // 7.5 Direct Inquiry About Module Content: "apa isi modul biologi", "apa isi modul ini", etc.
+    const isModuleContentQuery = /(?:apa\s+(?:saja\s+)?isi\s+modul|isi\s+modul\s+(?:ini|tersebut|terkait)?|jelaskan\s+isi\s+modul|modul\s+(?:ini\s+)?(?:berisi|membahas)\s+apa|ada\s+apa\s+saja\s+di\s+modul)/i.test(qLower) ||
+      (qLower.includes('isi modul') && (qLower.includes('apa') || qLower.includes('jelaskan')));
+    if (isModuleContentQuery) {
+      let targetMod = null;
+      if (typeof AppState !== 'undefined' && Array.isArray(AppState.modules)) {
+        for (const m of AppState.modules) {
+          const modWords = (m.name || '').toLowerCase().split(/[\s_\-]+/);
+          if (modWords.some(w => w.length > 3 && qLower.includes(w))) {
+            targetMod = m;
+            break;
+          }
+        }
+        if (!targetMod) {
+          targetMod = AppState.modules.find(m => m.id === AppState.activeModuleId) || AppState.modules[0];
+        }
+      }
+      if (!targetMod && moduleData) {
+        targetMod = moduleData;
+      }
+
+      if (targetMod) {
+        let contentAns = '';
+        if (targetMod.summaryNotes && targetMod.summaryNotes.trim().length > 20) {
+          let cleanNotes = targetMod.summaryNotes.trim();
+          cleanNotes = cleanNotes.replace(/^MODUL\s+PEMBELAJARAN[^\n]*\n?/i, '');
+          cleanNotes = cleanNotes.replace(/^BAB:\s*[^\n]*\n?/i, '');
+          contentAns = cleanNotes.trim();
+        } else if (targetMod.fullText) {
+          const headings = [];
+          const babRegex = /(?:Bab\s+\d+[:\s][^\n\r]+|[0-9]+\.\s+[A-Z][^\n\r]+)/gi;
+          let bm;
+          while ((bm = babRegex.exec(targetMod.fullText)) !== null) {
+            const h = bm[0].trim();
+            if (headings.length < 6 && !headings.includes(h)) headings.push(h);
+          }
+          if (headings.length > 0) {
+            contentAns = `Materi modul ini mencakup:\n${headings.map((h, i) => `${i + 1}. ${h}`).join('\n')}`;
+          } else {
+            contentAns = targetMod.fullText.slice(0, 300).trim() + '...';
+          }
+        }
+        mem.lastQuery = query;
+        mem.lastTopic = `Isi ${targetMod.name || 'Modul'}`;
+        mem.lastAnswer = contentAns;
+        mem.lastSourceType = 'document';
+        return { answer: contentAns, source: asksForSource ? (targetMod.name || 'Modul') : null };
+      } else {
+        return {
+          answer: 'Belum ada modul pembelajaran yang tersedia saat ini.',
+          source: null
+        };
+      }
+    }
+
     // 8. Summary Request from Active Module
     const isSummaryRequest = qLower.startsWith('rangkum') || qLower.includes('ringkasan modul') || qLower.includes('intisari materi');
     if (isSummaryRequest && moduleData) {
@@ -446,33 +645,28 @@ class AutonomousLearningAI {
       mem.lastTopic = `Rangkuman ${modTitle}`;
       mem.lastAnswer = sumResult.answer;
       mem.lastSourceType = 'document';
-      return sumResult;
+      return { answer: sumResult.answer, source: asksForSource ? sumResult.source : null };
     }
 
-    // 9. Document Search: Check if document has relevant facts
+    // 9. Document Search: Check if document has relevant facts (Only if relevant to module)
     if (moduleData && moduleData.fullText) {
       // Direct high-yield matches for Biology module
       if (qLower.includes('asam klorida') || qLower.includes('hcl') || (qLower.includes('pepsin') && qLower.includes('fungsi'))) {
-        const ans = `Asam klorida (HCl) diproduksi sel parietal lambung. Fungsinya: (1) mengaktifkan pepsinogen menjadi pepsin, (2) membunuh bakteri patogen, (3) menciptakan pH asam untuk kerja enzim. Pepsin sendiri berfungsi memecah protein menjadi polipeptida melalui hidrolisis ikatan peptida.`;
+        const ans = `Asam klorida (HCl) berfungsi mengaktifkan pepsinogen menjadi pepsin, membunuh bakteri patogen, dan menciptakan lingkungan asam lambung. Pepsin sendiri bertugas memecah protein menjadi polipeptida.`;
         mem.lastQuery = query;
         mem.lastTopic = 'Fungsi HCl dan Pepsin pada Sistem Pencernaan';
         mem.lastAnswer = ans;
         mem.lastSourceType = 'document';
-        return { answer: ans, source: `${modTitle}... - Bab 3, Hal. 14` };
+        return { answer: ans, source: asksForSource ? `${modTitle}... - Bab 3, Hal. 14` : null };
       }
 
       if (qLower.includes('renin') && (qLower.includes('pepsin') || qLower.includes('beda') || qLower.includes('apa itu'))) {
-        const ans = `Renin adalah enzim yang dihasilkan lambung untuk mengendapkan kasein (protein susu) menjadi parakasein agar dapat dicerna lebih lanjut.
-
-Perbedaan utama Renin dan Pepsin:
-(1) Substrat Spesifik: Renin khusus menggumpalkan protein susu (kasein), sedangkan Pepsin memecah berbagai macam ikatan protein menjadi polipeptida atau pepton.
-(2) Kondisi Keasaman (pH): Renin aktif pada pH moderat (pH 4–5), sedangkan Pepsin bekerja optimal pada suasana sangat asam (pH 1.5–2) yang disiapkan oleh HCl.
-(3) Efek Mekanis: Renin mencegah cairan susu mengalir terlalu cepat keluar dari lambung, sehingga enzim proteolitik memiliki waktu untuk memprosesnya.`;
+        const ans = `Renin berfungsi mengendapkan protein susu (kasein) pada pH 4–5. Perbedaannya dengan pepsin, pepsin memecah berbagai protein menjadi polipeptida pada suasana sangat asam (pH 1.5–2).`;
         mem.lastQuery = query;
         mem.lastTopic = 'Perbandingan Enzim Renin dan Pepsin';
         mem.lastAnswer = ans;
         mem.lastSourceType = 'document';
-        return { answer: ans, source: `${modTitle}... - Bab 3, Hal. 14` };
+        return { answer: ans, source: asksForSource ? `${modTitle}... - Bab 3, Hal. 14` : null };
       }
 
       // Check document passages
@@ -489,7 +683,7 @@ Perbedaan utama Renin dan Pepsin:
         mem.lastSourceType = 'document';
         return {
           answer: synthesized,
-          source: `${modTitle}... - ${bestPassage.heading || 'Kajian Materi'}, Hal. ${bestPassage.pageNum || 1}`
+          source: asksForSource ? `${modTitle}... - ${bestPassage.heading || 'Kajian Materi'}, Hal. ${bestPassage.pageNum || 1}` : null
         };
       }
     }
@@ -497,12 +691,12 @@ Perbedaan utama Renin dan Pepsin:
     // If strictly document-only was requested and not found in document
     if (isStrictDocOnly) {
       return {
-        answer: `Informasi mengenai hal tersebut tidak tercantum dalam dokumen "${modTitle}". Sesuai instruksi Anda untuk hanya bersumber dari dokumen, saya tidak menambahkan referensi eksternal.`,
-        source: `${modTitle} (Tidak ditemukan)`
+        answer: `Informasi tersebut tidak ditemukan dalam dokumen "${modTitle}".`,
+        source: asksForSource ? `${modTitle}` : null
       };
     }
 
-    // 10. General Knowledge Direct Answers (No filler, direct response)
+    // 10. General Knowledge Direct Answers (Principle 2: Jangan terpaku pada modul; Principle 4: Berpikir mandiri dan menyeluruh)
     const generalAns = this.getVersatileGeneralAnswer(query, qLower);
     mem.lastQuery = query;
     mem.lastTopic = query;
@@ -515,7 +709,7 @@ Perbedaan utama Renin dan Pepsin:
 
     return {
       answer: generalAns.text,
-      source: 'Pengetahuan Umum'
+      source: asksForSource ? (generalAns.source || 'Pengetahuan Umum') : null
     };
   }
 
@@ -533,7 +727,7 @@ Perbedaan utama Renin dan Pepsin:
     return null;
   }
 
-  static handleFollowUp(type, mem, modTitle) {
+  static handleFollowUp(type, mem, modTitle, asksForSource = false) {
     if (!mem.lastAnswer) {
       return {
         answer: 'Silakan sampaikan pertanyaan atau konsep yang ingin dibahas.',
@@ -543,28 +737,28 @@ Perbedaan utama Renin dan Pepsin:
 
     if (type === 'EXPLAIN_MORE') {
       return {
-        answer: `Penjelasan lebih lanjut mengenai ${mem.lastTopic}:\n\nKonsep ini bekerja melalui mekanisme terkoordinasi di mana tahap awal menyiapkan kondisi operasional yang dibutuhkan, lalu komponen inti mengeksekusi fungsi utamanya secara bertahap agar hasil yang diperoleh stabil dan terukur.`,
-        source: mem.lastSourceType === 'document' ? `${modTitle}... - Penjelasan Lanjutan` : 'Pengetahuan Umum'
+        answer: `Mekanismenya bekerja dengan menyiapkan kondisi awal terlebih dahulu, lalu komponen utama mengeksekusi fungsinya secara bertahap dan terkoordinasi.`,
+        source: asksForSource ? (mem.lastSourceType === 'document' ? `${modTitle}...` : 'Pengetahuan Umum') : null
       };
     }
 
     if (type === 'GIVE_EXAMPLE') {
       if (mem.lastTopic.toLowerCase().includes('pencernaan') || mem.lastTopic.toLowerCase().includes('pepsin') || mem.lastTopic.toLowerCase().includes('renin')) {
         return {
-          answer: `Contoh konkret:\n1. Renin: Pada bayi, renin menggumpalkan susu cair menjadi endapan kasein padat di lambung agar tidak langsung lewat ke usus sebelum nutrisinya terserap.\n2. Pepsin: Saat kita makan telur atau ayam, pepsin memotong rantai protein panjang menjadi polipeptida pendek agar usus halus mudah menyerap asam amino.`,
-          source: `${modTitle}... - Contoh Aplikasi Nyata`
+          answer: `Contohnya: renin menggumpalkan susu cair pada lambung bayi agar nutrisinya sempat diserap, sedangkan pepsin memecah protein dari makanan padat seperti telur atau ayam menjadi polipeptida.`,
+          source: asksForSource ? `${modTitle}...` : null
         };
       }
       return {
-        answer: `Contoh penerapan dari ${mem.lastTopic}:\nDalam sistem nyata, ketika beban kerja bertambah, sistem secara otomatis mengaktifkan mekanisme adaptasi untuk menstabilkan output tanpa menurunkan kualitas kerja.`,
-        source: 'Pengetahuan Umum - Ilustrasi'
+        answer: `Contohnya: ketika beban kerja dalam sistem meningkat, mekanisme adaptasi otomatis diaktifkan untuk menjaga kestabilan output.`,
+        source: asksForSource ? 'Pengetahuan Umum' : null
       };
     }
 
     if (type === 'MAKE_SHORTER') {
       return {
-        answer: `Ringkasan:\n• Fungsi utama: Menjalankan peran spesifik dalam sistem.\n• Syarat kerja: Memerlukan kondisi lingkungan yang sesuai.\n• Hasil: Memastikan proses berjalan efektif dan terkoordinasi.`,
-        source: 'Ringkasan Intisari'
+        answer: `Intinya: komponen ini bertugas menjalankan fungsi spesifik pada kondisi lingkungan yang sesuai.`,
+        source: null
       };
     }
   }
@@ -643,27 +837,52 @@ Perbedaan utama Renin dan Pepsin:
 
   // --- Universal General Knowledge Direct Answers ---
   static getVersatileGeneralAnswer(query, qLower) {
-    // English responses
-    const isEnglish = /\b(what is|why is|how does|who is|can you|explain)\b/i.test(qLower);
+    const mem = this.contextMemory;
+
+    // 1. Ambiguity handling (Principle 7: Jika terdapat beberapa kemungkinan interpretasi yang berbeda secara signifikan, ajukan satu pertanyaan klarifikasi yang paling penting)
+    const strippedVague = qLower.replace(/[?.,!]/g, '').trim();
+    if (['gimana', 'maksudnya', 'terus', 'lalu', 'kenapa gitu', 'kenapa', 'kok bisa', 'apa maksudnya'].includes(strippedVague)) {
+      return {
+        isConversational: true,
+        text: mem.lastTopic
+          ? `Apakah Anda ingin penjelasan lebih mendalam mengenai konsep **${mem.lastTopic}**, atau ada bagian tertentu yang ingin kita perjelas?`
+          : 'Pertanyaan Anda cukup ringkas. Bisakah Anda menjelaskan lebih spesifik topik atau materi apa yang ingin kita diskusikan?'
+      };
+    }
+
+    // 2. English responses
+    const isEnglish = /\b(what is|why is|how does|who is|can you|explain|tell me about)\b/i.test(qLower);
     if (isEnglish) {
       if (qLower.includes('photosynthesis')) {
-        return { isConversational: false, text: "Photosynthesis is the biological process by which green plants convert light energy, carbon dioxide, and water into glucose and oxygen: 6CO2 + 6H2O + Light → C6H12O6 + 6O2." };
+        return { isConversational: false, text: "Photosynthesis is the biological process by which green plants convert light energy, carbon dioxide, and water into glucose and oxygen:\n**6CO2 + 6H2O + Light → C6H12O6 + 6O2**." };
       }
       if (qLower.includes('gravity')) {
-        return { isConversational: false, text: "Gravity is a fundamental physical interaction causing mutual attraction between all entities with mass or energy. On Earth, it accelerates falling objects at approximately 9.8 m/s²." };
+        return { isConversational: false, text: "Gravity is a fundamental physical interaction causing mutual attraction between all entities with mass or energy. On Earth, it accelerates falling objects at approximately **9.8 m/s²**." };
       }
-      return { isConversational: false, text: `Answer to "${query}": This is determined by the fundamental physical and logical principles governing the system, ensuring stability and measurable results.` };
+      if (qLower.includes('mitochondria')) {
+        return { isConversational: false, text: "Mitochondria are the membrane-bound organelles that generate most of the chemical energy needed to power the cell's biochemical reactions (ATP via cellular respiration)." };
+      }
+      return {
+        isConversational: false,
+        text: `Regarding **"${query}"**: This topic involves fundamental scientific and conceptual principles designed to operate systematically and produce consistent, verifiable outcomes.`
+      };
     }
 
-    // Social courtesies
-    if (/^(terima kasih|makasih|thanks|matur nuwun|syukron)/i.test(qLower)) {
-      return { isConversational: true, text: 'Sama-sama! Senang bisa membantu.' };
+    // 3. Social courtesies & Chit-chat
+    if (/^(terima kasih|makasih|thanks|matur nuwun|syukron|thank you)/i.test(qLower)) {
+      const namePart = mem.userName ? ` ${mem.userName}` : '';
+      return { isConversational: true, text: `Sama-sama${namePart}! Senang bisa membantu Anda belajar.` };
     }
-    if (/^(keren|mantap|hebat|bagus|ok|oke|siap|baiklah)/i.test(qLower)) {
-      return { isConversational: true, text: 'Baik, silakan beri tahu jika ada hal lain yang ingin ditanyakan.' };
+    if (/^(keren|mantap|hebat|bagus|ok|oke|siap|baiklah|sip|yoi)/i.test(qLower)) {
+      const namePart = mem.userName ? ` ${mem.userName}` : '';
+      return { isConversational: true, text: `Siap${namePart}! Silakan beri tahu jika ada hal lain yang ingin Anda pelajari atau tanyakan.` };
+    }
+    if (/^(apa kabar|gimana kabarmu|bagaimana kabarmu|how are you)/i.test(qLower)) {
+      const namePart = mem.userName ? `, ${mem.userName}` : '';
+      return { isConversational: true, text: `Kabar saya sangat baik dan siap membantu Anda belajar${namePart}! Bagaimana dengan Anda?` };
     }
 
-    // Math Evaluation
+    // 4. Math Evaluation & Aritmatika
     const mathMatch = qLower.match(/(?:berapa|hitung)?\s*(\d+(?:\.\d+)?)\s*([\+\-\*\/xX:])\s*(\d+(?:\.\d+)?)/);
     if (mathMatch) {
       const a = parseFloat(mathMatch[1]);
@@ -677,9 +896,9 @@ Perbedaan utama Renin dan Pepsin:
       return { isConversational: true, text: `${a} ${op} ${b} = **${res}**` };
     }
 
-    // Geography & Capitals
+    // 5. Geography & Capitals
     if (qLower.includes('ibukota indonesia') || qLower.includes('ibu kota indonesia')) {
-      return { isConversational: false, text: 'Ibu kota Indonesia saat ini adalah Jakarta, dengan Nusantara (IKN) di Kalimantan Timur sebagai ibu kota baru yang sedang dikembangkan.' };
+      return { isConversational: false, text: 'Ibu kota Indonesia saat ini adalah Jakarta, dengan Ibu Kota Nusantara (IKN) di Kalimantan Timur sebagai ibu kota baru yang sedang dikembangkan.' };
     }
     if (qLower.includes('ibukota prancis') || qLower.includes('ibu kota prancis')) {
       return { isConversational: false, text: 'Ibu kota Prancis adalah Paris.' };
@@ -687,42 +906,97 @@ Perbedaan utama Renin dan Pepsin:
     if (qLower.includes('ibukota jepang') || qLower.includes('ibu kota jepang')) {
       return { isConversational: false, text: 'Ibu kota Jepang adalah Tokyo.' };
     }
+    if (qLower.includes('ibukota amerika') || qLower.includes('ibu kota amerika')) {
+      return { isConversational: false, text: 'Ibu kota Amerika Serikat adalah Washington, D.C.' };
+    }
+    if (qLower.includes('ibukota inggris') || qLower.includes('ibu kota inggris')) {
+      return { isConversational: false, text: 'Ibu kota Inggris (Britania Raya) adalah London.' };
+    }
+    if (qLower.includes('ibukota australia') || qLower.includes('ibu kota australia')) {
+      return { isConversational: false, text: 'Ibu kota Australia adalah Canberra.' };
+    }
+    if (qLower.includes('benua terbesar')) {
+      return { isConversational: false, text: 'Benua terbesar di dunia adalah Benua Asia, mencakup sekitar 30% dari total luas daratan Bumi.' };
+    }
+    if (qLower.includes('samudra terbesar') || qLower.includes('samudera terbesar')) {
+      return { isConversational: false, text: 'Samudra terbesar dan terdalam di dunia adalah Samudra Pasifik, mencakup lebih dari sepertiga luas permukaan Bumi.' };
+    }
 
-    // History
+    // 6. History
     if (qLower.includes('presiden pertama indonesia') || qLower.includes('presiden ri pertama')) {
       return { isConversational: false, text: 'Presiden pertama Republik Indonesia adalah Ir. Soekarno, dengan Drs. Mohammad Hatta sebagai Wakil Presiden pertama.' };
     }
     if (qLower.includes('kapan indonesia merdeka') || qLower.includes('tanggal kemerdekaan indonesia')) {
       return { isConversational: false, text: 'Indonesia memproklamasikan kemerdekaannya pada hari Jumat, 17 Agustus 1945.' };
     }
+    if (qLower.includes('pancasila')) {
+      return { isConversational: false, text: 'Pancasila adalah dasar ideologi negara Indonesia, terdiri dari 5 sila:\n1. Ketuhanan Yang Maha Esa\n2. Kemanusiaan yang Adil dan Beradab\n3. Persatuan Indonesia\n4. Kerakyatan yang Dipimpin oleh Hikmat Kebijaksanaan dalam Permusyawaratan/Perwakilan\n5. Keadilan Sosial bagi Seluruh Rakyat Indonesia.' };
+    }
 
-    // Science FAQs
+    // 7. Science & Biology FAQs
     if (qLower.includes('fotosintesis')) {
-      return { isConversational: false, text: 'Fotosintesis adalah proses tumbuhan berklorofil membuat makanan (glukosa) dan menghasilkan oksigen menggunakan air, karbon dioksida, dan cahaya matahari.\nReaksi: 6CO2 + 6H2O + Cahaya → C6H12O6 + 6O2.' };
+      return { isConversational: false, text: 'Fotosintesis adalah proses tumbuhan hijau mengubah air, karbon dioksida, dan cahaya matahari menjadi glukosa serta oksigen (6CO2 + 6H2O + Cahaya → C6H12O6 + 6O2).' };
     }
     if (qLower.includes('mitokondria')) {
-      return { isConversational: false, text: 'Mitokondria adalah organel sel penghasil energi utama (powerhouse of the cell) yang memproduksi molekul ATP melalui respirasi seluler.' };
+      return { isConversational: false, text: 'Mitokondria menghasilkan energi yang dibutuhkan sel untuk menjalankan fungsinya.' };
     }
-    if (qLower.includes('gravitasi')) {
-      return { isConversational: false, text: 'Gravitasi adalah gaya tarik-menarik antara semua partikel atau benda yang memiliki massa. Di permukaan Bumi, percepatan gravitasinya sekitar 9.8 m/s².' };
+    if (/\bsel\b/i.test(qLower) && (qLower.includes('apa itu') || qLower.includes('pengertian') || qLower.includes('adalah') || qLower.split(/\s+/).length <= 2)) {
+      return { isConversational: false, text: 'Sel adalah unit struktural dan fungsional terkecil penyusun semua makhluk hidup.' };
     }
-    if (qLower.includes('langit biru') || qLower.includes('langit berwarna biru')) {
-      return { isConversational: false, text: 'Langit berwarna biru karena Hamburan Rayleigh: molekul gas di atmosfer Bumi menghamburkan cahaya matahari berpanjang gelombang pendek (biru dan nila) lebih kuat ke segala arah dibanding cahaya berpanjang gelombang panjang (merah).' };
+    if (/\b(dna|rna)\b/i.test(qLower)) {
+      return { isConversational: false, text: 'DNA adalah materi genetik rantai ganda pembawa informasi biologis, sedangkan RNA bertugas menerjemahkannya dalam sintesis protein.' };
     }
-    if (qLower.includes('atom')) {
-      return { isConversational: false, text: 'Atom adalah partikel terkecil penyusun unsur kimia, terdiri dari inti bermuatan positif (proton dan neutron) yang dikelilingi awan elektron bermuatan negatif.' };
+    if (qLower.includes('peredaran darah') || qLower.includes('sirkulasi darah')) {
+      return { isConversational: false, text: 'Sistem peredaran darah manusia mengedarkan darah dari jantung ke seluruh tubuh dan paru-paru untuk pertukaran gas serta nutrisi.' };
     }
-    if (qLower.includes('pitagoras') || qLower.includes('pythagoras')) {
-      return { isConversational: false, text: 'Teorema Pythagoras menyatakan bahwa pada segitiga siku-siku, kuadrat sisi miring (hipotenusa) sama dengan jumlah kuadrat kedua sisi siku-sikunya:\n**a² + b² = c²**' };
+    if (qLower.includes('jantung') && (qLower.includes('fungsi') || qLower.includes('bagian') || qLower.includes('apa'))) {
+      return { isConversational: false, text: 'Jantung berfungsi memompa darah ke seluruh tubuh melalui empat ruang: serambi kanan, bilik kanan, serambi kiri, dan bilik kiri.' };
     }
-    if (qLower.includes('hukum archimedes')) {
-      return { isConversational: false, text: 'Hukum Archimedes menyatakan bahwa benda yang dicelupkan ke dalam zat cair akan mengalami gaya apung ke atas sebesar berat zat cair yang dipindahkan oleh benda tersebut.' };
+    if (qLower.includes('ginjal')) {
+      return { isConversational: false, text: 'Ginjal adalah organ ekskresi yang menyaring darah untuk membuang sisa metabolisme berupa urine serta menjaga keseimbangan cairan tubuh.' };
     }
 
-    // Direct generic response without fluff
+    // 8. Physics & Chemistry
+    if (qLower.includes('gravitasi')) {
+      return { isConversational: false, text: 'Gravitasi adalah gaya tarik-menarik antara semua benda bermassa, dengan percepatan rata-rata 9.8 m/s² di permukaan Bumi.' };
+    }
+    if (qLower.includes('langit biru') || qLower.includes('langit berwarna biru') || (qLower.includes('langit') && qLower.includes('biru'))) {
+      return { isConversational: false, text: 'Langit terlihat biru karena molekul udara lebih banyak menghamburkan cahaya biru dari Matahari dibandingkan cahaya dengan panjang gelombang yang lebih panjang.' };
+    }
+    if (qLower.includes('atom')) {
+      return { isConversational: false, text: 'Atom adalah partikel dasar terkecil penyusun materi, terdiri dari inti (proton dan neutron) serta elektron yang mengitarinya.' };
+    }
+    if (qLower.includes('hukum newton')) {
+      return { isConversational: false, text: 'Hukum Newton terdiri dari 3 hukum: Hukum I (kelembaman/inersia), Hukum II (F = m × a), dan Hukum III (gaya aksi = -reaksi).' };
+    }
+    if (qLower.includes('pitagoras') || qLower.includes('pythagoras')) {
+      return { isConversational: false, text: 'Teorema Pythagoras menyatakan bahwa pada segitiga siku-siku, kuadrat sisi miring sama dengan jumlah kuadrat kedua sisi lainnya: a² + b² = c².' };
+    }
+    if (qLower.includes('hukum archimedes')) {
+      return { isConversational: false, text: 'Hukum Archimedes menyatakan bahwa benda yang dicelupkan ke fluida mengalami gaya apung ke atas sebesar berat zat cair yang dipindahkan.' };
+    }
+    if (qLower.includes('asam basa') || qLower.includes('asam dan basa')) {
+      return { isConversational: false, text: 'Asam melepaskan ion H+ dalam air (pH < 7), sedangkan basa melepaskan ion OH- (pH > 7).' };
+    }
+
+    // 9. Technology & AI
+    if (qLower.includes('kecerdasan buatan') || qLower.includes('artificial intelligence') || qLower.includes('apa itu ai')) {
+      return { isConversational: false, text: 'Kecerdasan Buatan (AI) adalah bidang ilmu komputer yang mengembangkan sistem agar mampu meniru kemampuan kognitif manusia seperti menalar dan belajar.' };
+    }
+    if (qLower.includes('algoritma')) {
+      return { isConversational: false, text: 'Algoritma adalah serangkaian instruksi terstruktur dan logis untuk menyelesaikan suatu masalah komputasi.' };
+    }
+
+    // 10. Direct Limitation Statement for Unknown Concepts (Principle: Utamakan Akurasi & Jangan Gunakan Template Generik)
+    const cleanedTopic = query
+      .replace(/^(apakah|apa|jelaskan|terangkan|bagaimana|mengapa|kenapa|sebutkan|uraikan|definisi|pengertian)\s+(tentang|mengenai|dari|itu)?\s*/i, '')
+      .replace(/[?.,!]+$/, '')
+      .trim();
+
+    const topicDisplay = cleanedTopic.length > 0 ? cleanedTopic : query;
     return {
       isConversational: false,
-      text: `Jawaban untuk "${query}": Konsep ini mengkaji prinsip dasar dan hubungan operasional antar komponen untuk mencapai fungsi yang diinginkan secara efektif.`
+      text: `Informasi mengenai "${topicDisplay}" belum tersedia dalam data offline saya.`
     };
   }
 
@@ -787,50 +1061,55 @@ Perbedaan utama Renin dan Pepsin:
 
   static synthesizeAutonomousAnswer(query, passages, isComparison, isFunctionQuery, moduleData) {
     const topPassage = passages[0].text;
-    const sentences = topPassage.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 15);
-    
-    if (isFunctionQuery) {
-      const points = sentences.slice(0, 4).map((s, idx) => `(${idx + 1}) ${s.trim()}`).join('\n');
-      return `Berdasarkan kajian materi pada dokumen referensi:\n\n${points}\n\nFungsi-fungsi di atas bekerja secara harmonis untuk mendukung kelancaran sistem yang bersangkutan.`;
+    const cleanPassage = topPassage.replace(/^(Bab\s+\d+[^:\n]+:?[^\n]*|Gambar\s+\d+[^:\n]*|Tabel\s+\d+[^:\n]*)\s*/gi, '').trim();
+    const sentences = cleanPassage
+      .split(/(?<=[.!?])\s+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 15 && !/^(Bab|Gambar|Tabel|Halaman)/i.test(s));
+
+    if (isComparison && sentences.length >= 2) {
+      return `${sentences[0]} Sementara itu, ${sentences[1]}`;
     }
 
-    if (isComparison) {
-      return `Berdasarkan perbandingan konsep pada dokumen referensi:\n\n(1) Aspek Karakteristik Utama:\n${sentences[0] || topPassage.slice(0, 160)}\n\n(2) Perbedaan Operasional & Peran:\n${sentences[1] || 'Masing-masing parameter beroperasi pada target dan tahapan yang spesifik.'}`;
+    if (isFunctionQuery && sentences.length > 0) {
+      return sentences.slice(0, 2).join(' ');
     }
 
-    const mainTakeaways = sentences.slice(0, 3).join(' ');
-    return `${mainTakeaways}\n\nKajian pada modul ini menekankan pemahaman relasi kausalitas antar variabel teoretis dan penerapannya dalam evaluasi fenomena ilmiah.`;
+    return sentences.slice(0, 2).join(' ') || cleanPassage.slice(0, 180);
   }
 
   static generateSummary(moduleData) {
-    const modTitle = moduleData.name || 'Modul';
-    const totalWords = moduleData.wordCount || (moduleData.fullText ? moduleData.fullText.split(/\s+/).length : 0);
-    const pages = moduleData.pageCount || 1;
-
     if (moduleData.summaryNotes && moduleData.summaryNotes.trim().length > 50) {
+      let cleanNotes = moduleData.summaryNotes.trim();
+      cleanNotes = cleanNotes.replace(/^MODUL\s+PEMBELAJARAN[^\n]*\n?/i, '');
+      cleanNotes = cleanNotes.replace(/^BAB:\s*[^\n]*\n?/i, '');
       return {
-        answer: `Rangkuman Intisari Materi "${modTitle}":\n\n${moduleData.summaryNotes.trim()}\n\n(Total Cakupan: ${pages} Halaman • ${totalWords} Kata Teranalisis).`,
-        source: `${modTitle} - Ikhtisar Terpadu`
+        answer: cleanNotes.trim(),
+        source: moduleData.name || 'Modul'
       };
     }
 
     const text = moduleData.fullText || '';
     const headings = [];
-    const babRegex = /(?:Bab\s+\d+|[0-9]+\.\s+[A-Z][^\n]+)/g;
+    const babRegex = /(?:Bab\s+\d+[:\s][^\n\r]+|[0-9]+\.\s+[A-Z][^\n\r]+)/gi;
     let m;
     while ((m = babRegex.exec(text)) !== null) {
-      if (headings.length < 5 && !headings.includes(m[0])) {
-        headings.push(m[0].trim());
+      const h = m[0].trim();
+      if (headings.length < 5 && !headings.includes(h)) {
+        headings.push(h);
       }
     }
 
-    const headingList = headings.length > 0 
-      ? headings.map((h, i) => `${i + 1}. ${h}`).join('\n')
-      : '1. Pengenalan Konsep Dasar\n2. Prinsip dan Mekanisme Inti\n3. Analisis Kausalitas & Evaluasi Fenomena\n4. Implikasi Praktis & Aplikasi Nyata';
+    if (headings.length > 0) {
+      return {
+        answer: `Rangkuman materi modul mencakup:\n${headings.map((h, i) => `${i + 1}. ${h}`).join('\n')}`,
+        source: moduleData.name || 'Modul'
+      };
+    }
 
     return {
-      answer: `Rangkuman Struktur Materi "${modTitle}":\n\nPokok Bahasan Utama:\n${headingList}\n\nIntisari Pembelajaran:\nModul ini menyajikan pembedahan komprehensif mengenai konsep fundamental, relasi antar variabel teoretis, dan data observasi terverifikasi. Pembelajar diarahkan untuk menguasai mekanisme kausalitas secara analitis dan aplikatif tanpa sebatas menghafal fakta di permukaan.`,
-      source: `${modTitle} - Rangkuman Eksekutif`
+      answer: (moduleData.fullText || '').slice(0, 300).trim() + '...',
+      source: moduleData.name || 'Modul'
     };
   }
 
@@ -1589,6 +1868,13 @@ async function initApp() {
       }
     }
 
+    // Load stored user name and instructions
+    const savedName = localStorage.getItem('asisten_user_name');
+    if (savedName) {
+      AppState.userName = savedName;
+      AutonomousLearningAI.contextMemory.userName = savedName;
+    }
+
     AppState.modules = storedModules;
     renderSidebarModules();
     updateModuleCount();
@@ -1919,12 +2205,33 @@ function appendAIMessage(text, source) {
   renderAIMessageDOM(text, source);
 }
 
+function formatChatMessage(str) {
+  if (typeof str !== 'string') return '';
+  let escaped = escapeHtml(str);
+  // Code block: ```code```
+  escaped = escaped.replace(/```([a-z0-9_-]*)\n?([\s\S]*?)```/gi, (m, lang, code) => {
+    return `<pre style="background: #1e293b; color: #f8fafc; padding: 12px; border-radius: 8px; margin: 8px 0; overflow-x: auto; font-family: monospace;"><code>${code}</code></pre>`;
+  });
+  // Inline code: `code`
+  escaped = escaped.replace(/`([^`]+)`/g, '<code style="background: #f1f5f9; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>');
+  // Bold: **text**
+  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text*
+  escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Newlines to <br>
+  escaped = escaped.replace(/\n/g, '<br>');
+  return escaped;
+}
+
 function renderUserMessageDOM(text) {
   const row = document.createElement('div');
   row.className = 'chat-row user';
+  const initial = (AppState.userName && AppState.userName.trim().length > 0)
+    ? AppState.userName.trim().charAt(0).toUpperCase()
+    : 'S';
   row.innerHTML = `
     <div class="chat-bubble user">${escapeHtml(text).replace(/\n/g, '<br>')}</div>
-    <div class="avatar-badge user">S</div>
+    <div class="avatar-badge user" title="${escapeHtml(AppState.userName || 'Student')}">${initial}</div>
   `;
   DOM.chatHistory.appendChild(row);
   DOM.chatHistory.scrollTop = DOM.chatHistory.scrollHeight;
@@ -1942,7 +2249,7 @@ function renderAIMessageDOM(text, source) {
   row.innerHTML = `
     <div class="avatar-badge ai">AI</div>
     <div class="chat-bubble ai">
-      ${escapeHtml(text).replace(/\n/g, '<br>')}
+      ${formatChatMessage(text)}
       ${sourceHtml}
     </div>
   `;

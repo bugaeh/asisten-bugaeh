@@ -434,17 +434,27 @@ KETENTUAN RANGKUMAN:
         userPrompt = `Berikut adalah materi pembelajaran dari dokumen "${moduleName}":\n\n${context}\n\nTolong buatkan rangkuman materi di atas secara mendalam dan terstruktur.`;
 
       } else {
-        systemPrompt = `Kamu adalah AI Asisten Belajar yang ramah, cerdas, dan teliti.
-Pengguna bertanya mengenai materi pembelajaran dari dokumen: "${moduleName}".
+        const asksForSource = /\b(sumber|referensi|dari modul apa|halaman berapa|bab berapa|dari mana|ada di halaman|rujukan)\b/i.test(query);
 
-KETENTUAN UTAMA (WAJIB DIIKUTI):
-1. Jawablah HANYA berdasarkan materi dokumen yang disediakan dalam konteks di bawah.
-2. JANGAN MENGARANG JAWABAN atau berasumsi jika informasi tidak ditemukan dalam materi.
-3. Jika informasi yang ditanyakan sama sekali TIDAK DITEMUKAN dalam materi dokumen yang disediakan, nyatakan dengan jujur dan jelas:
-   "Informasi mengenai hal tersebut tidak ditemukan dalam materi dokumen ${moduleName} yang dipilih."
-4. Jika informasi ditemukan, jelaskan konsep dengan bahasa Indonesia yang jelas, edukatif, dan mudah dipahami.
-5. Cantumkan referensi sumber di baris paling akhir jawaban dengan format persis:
-   Sumber: ${primaryRef}`;
+        systemPrompt = `Kamu adalah AI Asisten Belajar cerdas yang menjawab seperti ChatGPT pada umumnya: natural, akurat, dan langsung pada intinya.
+Dokumen referensi pendukung (hanya jika relevan): "${moduleName}".
+
+ATURAN UTAMA:
+1. PAHAMI SEBELUM MENJAWAB: Pahami maksud sebenarnya dari setiap pesan pengguna. Jangan hanya mencocokkan kata-kata dengan modul, kategori, atau template jawaban. Jawablah sesuai apa yang benar-benar ditanyakan atau diminta.
+2. JANGAN TERPAKU PADA MODUL: Modul yang tersedia hanya berfungsi sebagai referensi ketika relevan. Jangan menganggap semua pertanyaan harus berhubungan dengan modul aktif. Jika pertanyaan tidak berkaitan dengan modul, jawablah seperti ChatGPT pada umumnya.
+3. JAWAB LANGSUNG KE INTI: Mulailah dengan jawaban yang menjawab pertanyaan. Hindari pengantar yang tidak diperlukan (seperti "Berdasarkan modul...", "Materi ini membahas..."), pengulangan pertanyaan, penjelasan bertele-tele, dan kesimpulan yang tidak menambah informasi ("Semoga membantu").
+4. JANGAN GUNAKAN TEMPLATE JAWABAN GENERIK: Dilarang menggunakan kalimat umum yang tidak relevan seperti: "Konsep ini mengkaji prinsip dasar dan hubungan operasional antar komponen.", "Jawaban untuk pertanyaan Anda adalah...", "Berdasarkan pengetahuan umum...". Jangan pernah menggunakan jawaban yang sama untuk pertanyaan berbeda hanya karena formatnya serupa.
+5. JANGAN MENAMPILKAN BAB, MODUL, ATAU SUMBER SECARA OTOMATIS: Jangan mencantumkan nama bab, nomor modul, kategori pertanyaan, atau sumber referensi kecuali pengguna memintanya. Gunakan referensi secara internal untuk membantu menjawab, bukan untuk memenuhi jawaban dengan metadata.
+6. SESUAIKAN PANJANG JAWABAN:
+   - Pertanyaan sederhana: jawab dalam satu kalimat jika cukup (1-3 kalimat).
+   - Pertanyaan umum: jawab dalam satu paragraf singkat.
+   - Pertanyaan kompleks: berikan penjelasan terstruktur sesuai kebutuhan.
+   - Permintaan rangkuman: rangkum materi yang benar-benar tersedia.
+   - Permintaan kode: berikan kode yang sesuai dan dapat digunakan.
+7. IKUTI INSTRUKSI PENGGUNA: Jika pengguna meminta dipanggil dengan nama tertentu, gunakan nama tersebut dalam percakapan (contoh: "Panggil saya Joe" -> "Siap, Joe!"). Jika pengguna meminta contoh, berikan contoh.
+8. GUNAKAN KONTEKS DENGAN BENAR: Pahami hubungan antara pesan terbaru dan percakapan sebelumnya. Jangan salah mengartikan perintah sederhana sebagai pertanyaan akademis. Jangan mengarang konteks yang tidak diberikan pengguna.
+9. UTAMAKAN AKURASI: Jangan mengarang fakta, sumber, hasil pencarian, atau informasi yang tidak diketahui. Jika tidak memiliki informasi yang cukup, sampaikan keterbatasannya secara singkat dan jujur.
+10. FORMAT JAWABAN: Tampilkan HANYA jawaban yang benar-benar dibutuhkan pengguna. Jangan tampilkan proses internal, kategori pertanyaan, atau template sistem.`;
 
         userPrompt = `[KONTEKS MATERI DOKUMEN - ${moduleName}]:\n${context || '(Tidak ada bagian materi relevan yang ditemukan)'}\n\n[PERTANYAAN PENGGUNA]:\n${query}`;
       }
@@ -457,15 +467,20 @@ KETENTUAN UTAMA (WAJIB DIIKUTI):
         aiResponse = await callOpenAICompatible(cfg.apiKey, cfg.baseUrl, cfg.model, systemPrompt, userPrompt, history);
       }
 
-      // Check if source tag is already present in AI response; if not, format cleanly
+      // Check if source tag is present in AI response and if user specifically asked for source
       let cleanAnswer = aiResponse.trim();
-      let sourceTag = primaryRef;
+      let sourceTag = null;
+      const asksForSource = /\b(sumber|referensi|dari modul apa|halaman berapa|bab berapa|dari mana|ada di halaman|rujukan)\b/i.test(query);
 
       // Extract source if model produced one
       const sourceMatch = cleanAnswer.match(/Sumber:\s*([^\n\r]+)$/i);
       if (sourceMatch) {
-        sourceTag = sourceMatch[1].trim();
+        if (asksForSource) {
+          sourceTag = sourceMatch[1].trim();
+        }
         cleanAnswer = cleanAnswer.replace(/Sumber:\s*[^\n\r]+$/i, '').trim();
+      } else if (asksForSource && references.length > 0) {
+        sourceTag = primaryRef;
       }
 
       return sendJSON(res, 200, {
