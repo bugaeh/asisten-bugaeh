@@ -2250,4 +2250,401 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
 
+/* ==========================================================================
+   AI Learned Knowledge & Continuous Learning UI Styles
+   ========================================================================== */
+
+/* Header Memory Badge */
+.memory-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0ea5e9, #059669);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.35);
+  margin-left: 4px;
+  transition: transform 0.2s ease;
+}
+
+@keyframes pulseKnowledgeBadge {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); box-shadow: 0 0 12px rgba(16, 185, 129, 0.8); }
+  100% { transform: scale(1); }
+}
+
+.pulse-animation {
+  animation: pulseKnowledgeBadge 0.6s ease-in-out;
+}
+
+/* Chat In-Bubble Learned Knowledge Chip */
+.ai-learned-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border: 1px solid #6ee7b7;
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.08);
+}
+
+.ai-learned-chip:hover {
+  background: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
+  border-color: #10b981;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(5, 150, 105, 0.15);
+}
+
+.ai-learned-icon {
+  font-size: 16px;
+  line-height: 1.2;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.ai-learned-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-learned-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.ai-learned-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #065f46;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ai-learned-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.badge-fakta { background: #d1fae5; color: #047857; }
+.badge-konsep { background: #f3e8ff; color: #7e22ce; }
+.badge-preferensi { background: #e0e7ff; color: #3730a3; }
+.badge-koreksi { background: #fef3c7; color: #b45309; }
+
+.ai-learned-text {
+  font-size: 12.5px;
+  color: #064e3b;
+  font-weight: 500;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.ai-learned-action {
+  font-size: 11px;
+  font-weight: 600;
+  color: #059669;
+  align-self: center;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #a7f3d0;
+}
+
+/* Modal Knowledge Stats Bar */
+.knowledge-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.knowledge-stat-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.knowledge-stat-card .stat-number {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.knowledge-stat-card .stat-label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Modal Toolbar & Filter Chips */
+.knowledge-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.knowledge-filter-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.filter-chip.active {
+  background: #00796b;
+  border-color: #00796b;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Manual Teaching Box */
+.manual-teach-box {
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+/* Knowledge Cards Container & Items */
+.knowledge-cards-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.knowledge-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.knowledge-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
+}
+
+.knowledge-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.knowledge-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.knowledge-category-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge-cat-fakta { background: #ccfbf1; color: #0f766e; }
+.badge-cat-konsep { background: #f3e8ff; color: #7e22ce; }
+.badge-cat-preferensi { background: #e0e7ff; color: #4338ca; }
+.badge-cat-koreksi { background: #fef3c7; color: #b45309; }
+
+.knowledge-topic-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.knowledge-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.knowledge-time {
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.btn-delete-knowledge {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #94a3b8;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-delete-knowledge:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.knowledge-card-body {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.knowledge-card-body strong {
+  color: #0f172a;
+}
+
+.knowledge-source-prompt {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border-left: 3px solid #00796b;
+}
+
+/* Dark Mode Overrides for Knowledge UI */
+[data-theme="dark"] .ai-learned-chip,
+body.dark-mode .ai-learned-chip {
+  background: linear-gradient(135deg, #062822 0%, #06372c 100%);
+  border-color: #059669;
+}
+
+[data-theme="dark"] .ai-learned-chip:hover,
+body.dark-mode .ai-learned-chip:hover {
+  background: linear-gradient(135deg, #07382d 0%, #094738 100%);
+  border-color: #10b981;
+}
+
+[data-theme="dark"] .ai-learned-title,
+body.dark-mode .ai-learned-title {
+  color: #6ee7b7;
+}
+
+[data-theme="dark"] .ai-learned-text,
+body.dark-mode .ai-learned-text {
+  color: #a7f3d0;
+}
+
+[data-theme="dark"] .ai-learned-action,
+body.dark-mode .ai-learned-action {
+  background: #0f172a;
+  border-color: #059669;
+  color: #6ee7b7;
+}
+
+[data-theme="dark"] .knowledge-stat-card,
+body.dark-mode .knowledge-stat-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .knowledge-stat-card .stat-number,
+body.dark-mode .knowledge-stat-card .stat-number {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .filter-chip,
+body.dark-mode .filter-chip {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .filter-chip:hover,
+body.dark-mode .filter-chip:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .filter-chip.active,
+body.dark-mode .filter-chip.active {
+  background: #00796b;
+  border-color: #009688;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .manual-teach-box,
+body.dark-mode .manual-teach-box {
+  background: #09211c;
+  border-color: #0f766e;
+}
+
+[data-theme="dark"] .knowledge-card,
+body.dark-mode .knowledge-card {
+  background: #151d2a;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .knowledge-topic-title,
+body.dark-mode .knowledge-topic-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .knowledge-card-body,
+body.dark-mode .knowledge-card-body {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .knowledge-card-body strong,
+body.dark-mode .knowledge-card-body strong {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .knowledge-source-prompt,
+body.dark-mode .knowledge-source-prompt {
+  background: #0f172a;
+  color: #94a3b8;
+  border-left-color: #009688;
+}
+
+
 

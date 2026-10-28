@@ -116,6 +116,11 @@
               <span id="themeToggleIcon">🌙</span>
               <span id="themeToggleText">Mode Gelap</span>
             </button>
+            <button class="btn-header-info" id="btnOpenLearnedMemory" title="Pusat Memori & Ilmu Baru yang Dipelajari AI">
+              <span style="font-size: 14px;">🧠</span>
+              <span>Memori AI</span>
+              <span class="memory-count-badge" id="memoryCountBadge" style="display: none;">0</span>
+            </button>
             <button class="btn-header-info" id="btnOpenApiSettings" title="Konfigurasi API Model AI (Gemini / OpenAI)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"></circle>
@@ -547,6 +552,109 @@
           Hapus Semua Riwayat
         </button>
         <button class="btn-sidebar" onclick="closeModal('modalQuizHistory')">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: Pusat Pengetahuan & Memori Pembelajaran AI
+       ============================================================ -->
+  <div class="modal-overlay" id="modalLearnedKnowledge">
+    <div class="modal-card" style="max-width: 860px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 24px;">🧠</span>
+          <div>
+            <h3 style="margin: 0; line-height: 1.2;">Pusat Memori & Pembelajaran Mandiri AI</h3>
+            <p style="font-size: 12px; color: #64748b; margin-top: 2px;">
+              AI secara aktif menyerap ilmu baru, fakta penting, dan preferensi Anda dari pertanyaan yang diajukan agar dapat menjawab lebih jelas dan padat.
+            </p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('modalLearnedKnowledge')">&times;</button>
+      </div>
+
+      <div class="modal-content" style="padding-top: 14px;">
+        <!-- Knowledge Stats Bar -->
+        <div class="knowledge-stats-bar">
+          <div class="knowledge-stat-card">
+            <span class="stat-number" id="statTotalLearned">0</span>
+            <span class="stat-label">Total Ilmu Diserap</span>
+          </div>
+          <div class="knowledge-stat-card">
+            <span class="stat-number" id="statTotalFacts" style="color: #0f766e;">0</span>
+            <span class="stat-label">Fakta & Konsep</span>
+          </div>
+          <div class="knowledge-stat-card">
+            <span class="stat-number" id="statTotalPrefs" style="color: #4338ca;">0</span>
+            <span class="stat-label">Preferensi Pengguna</span>
+          </div>
+          <div class="knowledge-stat-card">
+            <span class="stat-number" id="statTotalCorrections" style="color: #b45309;">0</span>
+            <span class="stat-label">Koreksi Materi</span>
+          </div>
+        </div>
+
+        <!-- Controls Bar: Filter Tabs & Teach Form Toggle -->
+        <div class="knowledge-toolbar">
+          <div class="knowledge-filter-group" id="knowledgeFilterGroup">
+            <button class="filter-chip active" data-filter="all">Semua</button>
+            <button class="filter-chip" data-filter="fakta">Fakta Materi</button>
+            <button class="filter-chip" data-filter="konsep">Konsep Baru</button>
+            <button class="filter-chip" data-filter="preferensi">Preferensi</button>
+            <button class="filter-chip" data-filter="koreksi">Koreksi</button>
+          </div>
+          <button class="btn-sidebar btn-sidebar-primary" id="btnToggleManualTeach" style="padding: 6px 12px; font-size: 12.5px;">
+            ➕ Ajarkan Hal Baru
+          </button>
+        </div>
+
+        <!-- Collapsible Manual Teaching Form -->
+        <div class="manual-teach-box" id="manualTeachBox" style="display: none;">
+          <h4 style="font-size: 13.5px; margin-bottom: 8px; color: #0f766e;">➕ Ajarkan Pengetahuan / Aturan Baru ke AI</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+            <div>
+              <label class="form-label" style="font-size: 12px;">Topik / Subjek:</label>
+              <input type="text" class="form-input" id="teachTopicInput" placeholder="Contoh: Fisiologi Lambung, Format Jawaban, dll.">
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 12px;">Kategori:</label>
+              <select class="form-input" id="teachCategoryInput">
+                <option value="fakta">Fakta Materi / Sains</option>
+                <option value="konsep">Definisi & Konsep Baru</option>
+                <option value="preferensi">Preferensi Gaya & Jawaban</option>
+                <option value="koreksi">Koreksi Materi / Klarifikasi</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">Intisari Ilmu yang Harus Diingat AI (Jelas & Padat):</label>
+            <textarea class="form-input" id="teachInsightInput" rows="2" placeholder="Contoh: Enzim renin diproduksi di lambung dan berfungsi mengendapkan kasein susu pada bayi."></textarea>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button class="btn-sidebar" type="button" id="btnCancelManualTeach">Batal</button>
+            <button class="btn-sidebar btn-sidebar-primary" type="button" id="btnSubmitManualTeach">💾 Simpan ke Memori AI</button>
+          </div>
+        </div>
+
+        <!-- Knowledge Items Scrollable Container -->
+        <div class="knowledge-cards-scroll" id="learnedKnowledgeListContainer">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="learnedKnowledgeEmptyState" style="display: none; text-align: center; padding: 36px 16px; color: #94a3b8;">
+          <div style="font-size: 36px; margin-bottom: 8px;">🧠✨</div>
+          <p style="font-weight: 600; color: #475569; margin-bottom: 4px;">Belum Ada Ilmu yang Dipelajari</p>
+          <p style="font-size: 13px;">Kirimkan pertanyaan, fakta baru, atau koreksi di ruang chat. AI akan secara otomatis menganalisis dan mengingat hal-hal baru tersebut untuk memberikan jawaban yang lebih jelas dan padat.</p>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn-sidebar" id="btnClearAllKnowledge" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;">
+          Kosongkan Semua Memori
+        </button>
+        <button class="btn-sidebar btn-sidebar-primary" onclick="closeModal('modalLearnedKnowledge')">Tutup & Mulai Chat</button>
       </div>
     </div>
   </div>

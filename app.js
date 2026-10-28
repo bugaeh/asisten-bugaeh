@@ -13,9 +13,10 @@ if (typeof pdfjsLib !== 'undefined') {
    1. IndexedDB Persistent Storage
    ========================================================================== */
 const DB_NAME = 'AsistenBelajarDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_MODULES = 'modules';
 const STORE_QUIZ_HISTORY = 'quiz_history';
+const STORE_LEARNED_KNOWLEDGE = 'learned_knowledge';
 
 class ModuleDB {
   static open() {
@@ -28,6 +29,9 @@ class ModuleDB {
         }
         if (!db.objectStoreNames.contains(STORE_QUIZ_HISTORY)) {
           db.createObjectStore(STORE_QUIZ_HISTORY, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORE_LEARNED_KNOWLEDGE)) {
+          db.createObjectStore(STORE_LEARNED_KNOWLEDGE, { keyPath: 'id' });
         }
       };
       request.onsuccess = (e) => resolve(e.target.result);
@@ -123,6 +127,51 @@ class ModuleDB {
       req.onerror = () => reject(req.error);
     });
   }
+
+  // Learned Knowledge persistence (Continuous Learning)
+  static async saveLearnedKnowledge(record) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_LEARNED_KNOWLEDGE, 'readwrite');
+      const store = tx.objectStore(STORE_LEARNED_KNOWLEDGE);
+      const req = store.put(record);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  static async getAllLearnedKnowledge() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_LEARNED_KNOWLEDGE, 'readonly');
+      const store = tx.objectStore(STORE_LEARNED_KNOWLEDGE);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  static async deleteLearnedKnowledge(id) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_LEARNED_KNOWLEDGE, 'readwrite');
+      const store = tx.objectStore(STORE_LEARNED_KNOWLEDGE);
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  static async clearLearnedKnowledge() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_LEARNED_KNOWLEDGE, 'readwrite');
+      const store = tx.objectStore(STORE_LEARNED_KNOWLEDGE);
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
 }
 
 /* ==========================================================================
@@ -131,6 +180,8 @@ class ModuleDB {
 const AppState = {
   userName: (typeof localStorage !== 'undefined' && localStorage.getItem('asisten_user_name')) || '',
   customInstructions: [],
+  learnedKnowledge: [],
+  learnedFilter: 'all',
   modules: [],
   activeModuleId: 'modul_02',
   currentTab: 'chat', // 'chat' or 'quiz'
@@ -486,7 +537,7 @@ class AutonomousLearningAI {
     const qLower = normalized.toLowerCase();
 
     // 1. Direct User Directives & Personalization
-    const namePattern = /^(?:tolong\s+|bisa\s+)?(?:panggil\s+(?:saya|aku)|nama\s+(?:saya|ku)\s+adalah|nama\s+(?:saya|ku)|namaku\s+adalah|namaku|sebut\s+(?:saya|aku)|call\s+me|my\s+name\s+is)\s+([a-zA-Z0-9_\-\s]+)/i;
+    const namePattern = /^(?:tolong\s+|bisa\s+)?(?:panggil\s+(?:saya|aku)|nama\s+(?:saya|ku)\s+adalah|nama\s+(?:saya|ku)|namaku\s+adalah|namaku|sebut\s+(?:saya|aku)|call\s+me|my\s+name\s+is)\s+([a-zA-Z0-9_\-\s\.]+)/i;
     const nameMatch = qTrimmed.match(namePattern);
     if (nameMatch) {
       let rawName = nameMatch[1].trim();
@@ -593,6 +644,42 @@ class AutonomousLearningAI {
         ? `I am your intelligent AI Study Assistant${namePart}, ready to help explain concepts, answer questions, write code, and analyze reference materials.`
         : `Saya adalah Asisten Belajar cerdas yang siap membantu Anda${namePart} menjawab pertanyaan akademis, menjelaskan konsep secara komprehensif, membuat kuis, menulis kode, dan menganalisis modul referensi.`;
       return { answer: identityAns, source: null };
+    }
+
+    // 1b. Check Learned Knowledge Memory (Ilmu Baru yang Dipelajari AI)
+    if (typeof KnowledgeLearningEngine !== 'undefined' && KnowledgeLearningEngine.items.length > 0) {
+      const qTokens = qLower.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(t => t.length > 2 && !['apa', 'siapa', 'bagaimana', 'mengapa', 'kenapa', 'jelaskan', 'tentang', 'apakah', 'sebutkan'].includes(t));
+      
+      let matchedItem = null;
+      let maxScore = 0;
+
+      for (const item of KnowledgeLearningEngine.items) {
+        const itemCombined = `${item.topic || ''} ${item.insight || ''}`.toLowerCase();
+        let score = 0;
+        for (const token of qTokens) {
+          if (itemCombined.includes(token)) score++;
+        }
+        if (score > maxScore && score >= 1) {
+          maxScore = score;
+          matchedItem = item;
+        }
+      }
+
+      if (matchedItem && maxScore >= 1) {
+        let learnedAns = `**${matchedItem.insight}**`;
+        if (matchedItem.topic && matchedItem.topic !== 'Pengetahuan Umum') {
+          learnedAns += `\n\n*(Memori Pembelajaran: Dipelajari dari catatan topik "${matchedItem.topic}")*`;
+        }
+        mem.lastQuery = query;
+        mem.lastTopic = matchedItem.topic || 'Memori Pembelajaran';
+        mem.lastAnswer = learnedAns;
+        mem.lastSourceType = 'general';
+        return {
+          answer: learnedAns,
+          source: asksForSource ? `Memori AI (${matchedItem.topic})` : null,
+          learned: null
+        };
+      }
     }
 
     // Follow-ups
@@ -1904,6 +1991,39 @@ const ApiClient = {
       throw new Error(data.error || `HTTP error ${res.status}`);
     }
     return data;
+  },
+
+  async getLearnedKnowledge() {
+    try {
+      const res = await fetch('/api/learned-knowledge');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      return { success: false, items: [] };
+    }
+  },
+
+  async saveLearnedKnowledge(itemData) {
+    const res = await fetch('/api/learned-knowledge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(itemData)
+    });
+    return await res.json();
+  },
+
+  async deleteLearnedKnowledge(id) {
+    const res = await fetch(`/api/learned-knowledge?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+    return await res.json();
+  },
+
+  async clearAllLearnedKnowledge() {
+    const res = await fetch('/api/learned-knowledge?all=true', {
+      method: 'DELETE'
+    });
+    return await res.json();
   }
 };
 
@@ -2098,6 +2218,307 @@ const RAGRetriever = {
 };
 
 /* ==========================================================================
+   Knowledge Learning & Continuous Memory Engine (Pemerolehan Ilmu Baru AI)
+   ========================================================================== */
+const KnowledgeLearningEngine = {
+  items: [],
+  currentFilter: 'all',
+
+  async init() {
+    try {
+      // 1. Load from IndexedDB
+      const localItems = await ModuleDB.getAllLearnedKnowledge();
+      if (Array.isArray(localItems) && localItems.length > 0) {
+        this.items = localItems;
+      }
+    } catch (e) {
+      console.warn('Gagal memuat memori ilmu dari IndexedDB:', e.message);
+    }
+
+    // 2. Sync with backend API if available
+    try {
+      const res = await ApiClient.getLearnedKnowledge();
+      if (res && res.success && Array.isArray(res.items)) {
+        res.items.forEach(bItem => {
+          if (!this.items.find(l => l.id === bItem.id || (l.insight.toLowerCase() === bItem.insight.toLowerCase()))) {
+            this.items.push(bItem);
+            ModuleDB.saveLearnedKnowledge(bItem).catch(() => {});
+          }
+        });
+      }
+    } catch (e) {
+      // Backend offline, keep local
+    }
+
+    // Sort by timestamp desc
+    this.items.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+    // Update AutonomousLearningAI memory
+    this.syncToOfflineMemory();
+    this.updateUI();
+  },
+
+  syncToOfflineMemory() {
+    if (typeof AutonomousLearningAI !== 'undefined' && AutonomousLearningAI.contextMemory) {
+      AutonomousLearningAI.contextMemory.customNotes = this.items.map(k => ({
+        topic: k.topic,
+        text: k.insight,
+        category: k.category,
+        date: k.timestamp
+      }));
+    }
+  },
+
+  // Heuristic extractor for offline / client-side learning from prompts
+  extractFromPrompt(prompt) {
+    if (!prompt || typeof prompt !== 'string') return null;
+    const pTrim = prompt.trim();
+    const pLower = pTrim.toLowerCase();
+
+    // 1. Personalization / Name directive
+    const nameMatch = pTrim.match(/(?:panggil\s+(?:saya|aku)|nama\s+(?:saya|ku)\s+adalah|nama\s+(?:saya|ku)|namaku)\s+([a-zA-Z0-9_\-\s]+)/i);
+    if (nameMatch) {
+      const rawName = nameMatch[1].replace(/[.,!?;:]+$/g, '').trim();
+      if (rawName.length > 1 && rawName.length < 35) {
+        return {
+          topic: 'Panggilan Pengguna',
+          insight: `Pengguna meminta dipanggil dengan nama "${rawName}".`,
+          category: 'preferensi',
+          sourcePrompt: pTrim
+        };
+      }
+    }
+
+    // 2. Explicit Note / Remember instruction
+    const noteMatch = pTrim.match(/^(?:tolong\s+)?(?:catat|ingat|simpan|rekam|tambahkan\s+fakta)\s*(?:bahwa\s*)?[:\-\s]\s*(?:bahwa\s*)?(.+)/i);
+    if (noteMatch && noteMatch[1].trim().length > 4) {
+      const cleanInsight = noteMatch[1].replace(/^(?:bahwa|tentang)\s+/i, '').trim();
+      return {
+        topic: 'Catatan Penting',
+        insight: cleanInsight,
+        category: 'fakta',
+        sourcePrompt: pTrim
+      };
+    }
+
+    // 3. Explicit Correction
+    const corrMatch = pTrim.match(/^(?:bukan\s+([^,]+),\s*(?:tetapi|tapi|melainkan|yang benar)\s+(.+)|salah\s*[,:]\s*(?:yang benar\s+)?(.+))/i);
+    if (corrMatch) {
+      const insightText = (corrMatch[2] || corrMatch[3] || pTrim).trim();
+      return {
+        topic: 'Koreksi Materi',
+        insight: `Koreksi: ${insightText}`,
+        category: 'koreksi',
+        sourcePrompt: pTrim
+      };
+    }
+
+    // 4. Stated Fact or Rule
+    const factMatch = pTrim.match(/^(?:faktanya|sebenarnya|perlu kamu tahu bahwa|ketahuilah bahwa)\s*[,:]?\s*(.+)/i);
+    if (factMatch && factMatch[1].trim().length > 8) {
+      return {
+        topic: 'Fakta Baru',
+        insight: factMatch[1].trim(),
+        category: 'fakta',
+        sourcePrompt: pTrim
+      };
+    }
+
+    // 5. Explicit Formatting Preference
+    if (pLower.includes('selalu jawab') || pLower.includes('mulai sekarang') || pLower.includes('jangan terlalu panjang') || pLower.includes('jawab singkat saja')) {
+      if (pTrim.length > 8 && pTrim.length < 250) {
+        return {
+          topic: 'Format Jawaban',
+          insight: pTrim,
+          category: 'preferensi',
+          sourcePrompt: pTrim
+        };
+      }
+    }
+
+    // 6. Definition pattern: "X adalah Y" where sentence introduces a new concept
+    const defMatch = pTrim.match(/^([a-zA-Z0-9_\-\s]{3,35})\s+(?:adalah|yaitu|merupakan|yakni|artinya)\s+([^.!?]{10,})/i);
+    if (defMatch && !pLower.startsWith('apa') && !pLower.startsWith('jelaskan') && !pLower.startsWith('siapa') && !pLower.includes('?')) {
+      return {
+        topic: defMatch[1].trim(),
+        insight: `${defMatch[1].trim()} adalah ${defMatch[2].trim()}`,
+        category: 'konsep',
+        sourcePrompt: pTrim
+      };
+    }
+
+    return null;
+  },
+
+  async recordLearnedItem(item) {
+    if (!item || !item.insight) return null;
+    
+    // Check if already in items
+    const cleanNew = item.insight.toLowerCase().replace(/[^\w]/g, '');
+    let existing = this.items.find(k => k.insight.toLowerCase().replace(/[^\w]/g, '') === cleanNew);
+    
+    if (existing) {
+      existing.timestamp = new Date().toISOString();
+      if (item.topic) existing.topic = item.topic;
+      await ModuleDB.saveLearnedKnowledge(existing);
+      this.syncToOfflineMemory();
+      this.updateUI();
+      return existing;
+    }
+
+    const newItem = {
+      id: item.id || `learn_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      topic: (item.topic || 'Pengetahuan Umum').trim(),
+      insight: item.insight.trim(),
+      category: item.category || 'fakta',
+      sourcePrompt: (item.sourcePrompt || '').trim(),
+      timestamp: item.timestamp || new Date().toISOString()
+    };
+
+    this.items.unshift(newItem);
+    if (this.items.length > 150) this.items.pop();
+
+    // Persist in IndexedDB
+    try {
+      await ModuleDB.saveLearnedKnowledge(newItem);
+    } catch (e) {
+      console.warn('Gagal menyimpan ilmu ke IndexedDB:', e.message);
+    }
+
+    // Persist to Backend if online
+    try {
+      if (AppState.apiConfig && AppState.apiConfig.configured) {
+        await ApiClient.saveLearnedKnowledge(newItem);
+      }
+    } catch (e) {}
+
+    this.syncToOfflineMemory();
+    this.updateUI(true); // pulse badge
+    return newItem;
+  },
+
+  async deleteItem(id) {
+    this.items = this.items.filter(k => k.id !== id);
+    try {
+      await ModuleDB.deleteLearnedKnowledge(id);
+    } catch (e) {}
+
+    try {
+      await ApiClient.deleteLearnedKnowledge(id);
+    } catch (e) {}
+
+    this.syncToOfflineMemory();
+    this.updateUI();
+    showToast('Ilmu memori berhasil dihapus.', 'info');
+  },
+
+  async clearAll() {
+    this.items = [];
+    try {
+      await ModuleDB.clearLearnedKnowledge();
+    } catch (e) {}
+
+    try {
+      await ApiClient.clearAllLearnedKnowledge();
+    } catch (e) {}
+
+    this.syncToOfflineMemory();
+    this.updateUI();
+    showToast('Semua memori pembelajaran AI telah dikosongkan.', 'info');
+  },
+
+  updateUI(pulse = false) {
+    // 1. Header counter badge
+    const badge = document.getElementById('memoryCountBadge');
+    if (badge) {
+      badge.textContent = this.items.length;
+      badge.style.display = this.items.length > 0 ? 'inline-flex' : 'none';
+      if (pulse) {
+        badge.classList.remove('pulse-animation');
+        void badge.offsetWidth;
+        badge.classList.add('pulse-animation');
+      }
+    }
+
+    // 2. Modal counters
+    const statTotal = document.getElementById('statTotalLearned');
+    const statFacts = document.getElementById('statTotalFacts');
+    const statPrefs = document.getElementById('statTotalPrefs');
+    const statCorrections = document.getElementById('statTotalCorrections');
+
+    if (statTotal) statTotal.textContent = this.items.length;
+    if (statFacts) statFacts.textContent = this.items.filter(k => k.category === 'fakta' || k.category === 'konsep').length;
+    if (statPrefs) statPrefs.textContent = this.items.filter(k => k.category === 'preferensi').length;
+    if (statCorrections) statCorrections.textContent = this.items.filter(k => k.category === 'koreksi').length;
+
+    // 3. Render Modal list
+    this.renderModalList();
+  },
+
+  renderModalList() {
+    const container = document.getElementById('learnedKnowledgeListContainer');
+    const emptyState = document.getElementById('learnedKnowledgeEmptyState');
+    if (!container) return;
+
+    let filtered = this.items;
+    if (this.currentFilter !== 'all') {
+      filtered = this.items.filter(k => k.category === this.currentFilter);
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = '';
+      if (emptyState) emptyState.style.display = 'block';
+      return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+
+    container.innerHTML = filtered.map(item => {
+      const catClass = `badge-cat-${item.category || 'fakta'}`;
+      let catLabel = 'Fakta Materi';
+      if (item.category === 'preferensi') catLabel = 'Preferensi';
+      else if (item.category === 'koreksi') catLabel = 'Koreksi';
+      else if (item.category === 'konsep') catLabel = 'Konsep Baru';
+
+      const timeFormatted = item.timestamp ? new Date(item.timestamp).toLocaleString('id-ID', {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+      }) : 'Baru saja';
+
+      const sourcePromptHtml = item.sourcePrompt ? `
+        <div class="knowledge-source-prompt">
+          <span class="prompt-icon">💬</span>
+          <em>"${escapeHtml(item.sourcePrompt)}"</em>
+        </div>
+      ` : '';
+
+      return `
+        <div class="knowledge-card" id="card_knowledge_${escapeHtml(item.id)}">
+          <div class="knowledge-card-header">
+            <div class="knowledge-card-meta">
+              <span class="knowledge-category-pill ${catClass}">${catLabel}</span>
+              <span class="knowledge-topic-title">${escapeHtml(item.topic || 'Umum')}</span>
+            </div>
+            <div class="knowledge-card-actions">
+              <span class="knowledge-time">${timeFormatted}</span>
+              <button class="btn-delete-knowledge" onclick="KnowledgeLearningEngine.deleteItem('${escapeHtml(item.id)}')" title="Hapus ilmu ini">
+                🗑️
+              </button>
+            </div>
+          </div>
+          <div class="knowledge-card-body">
+            <strong>${escapeHtml(item.insight)}</strong>
+            ${sourcePromptHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+};
+
+if (typeof window !== 'undefined') window.KnowledgeLearningEngine = KnowledgeLearningEngine;
+if (typeof module !== 'undefined') module.exports = { AutonomousLearningAI, NLPIntentProcessor, KnowledgeLearningEngine, ModuleDB };
+
+/* ==========================================================================
    6. UI Controller & Event Handlers
    ========================================================================== */
 
@@ -2122,9 +2543,23 @@ const DOM = {
   btnThemeToggle: document.getElementById('btnThemeToggle'),
   themeToggleIcon: document.getElementById('themeToggleIcon'),
   themeToggleText: document.getElementById('themeToggleText'),
+  btnOpenLearnedMemory: document.getElementById('btnOpenLearnedMemory'),
+  memoryCountBadge: document.getElementById('memoryCountBadge'),
   btnSystemInfo: document.getElementById('btnSystemInfo'),
   btnOpenApiSettings: document.getElementById('btnOpenApiSettings'),
   headerApiStatusDot: document.getElementById('headerApiStatusDot'),
+  modalLearnedKnowledge: document.getElementById('modalLearnedKnowledge'),
+  btnToggleManualTeach: document.getElementById('btnToggleManualTeach'),
+  manualTeachBox: document.getElementById('manualTeachBox'),
+  teachTopicInput: document.getElementById('teachTopicInput'),
+  teachCategoryInput: document.getElementById('teachCategoryInput'),
+  teachInsightInput: document.getElementById('teachInsightInput'),
+  btnCancelManualTeach: document.getElementById('btnCancelManualTeach'),
+  btnSubmitManualTeach: document.getElementById('btnSubmitManualTeach'),
+  btnClearAllKnowledge: document.getElementById('btnClearAllKnowledge'),
+  knowledgeFilterGroup: document.getElementById('knowledgeFilterGroup'),
+  learnedKnowledgeListContainer: document.getElementById('learnedKnowledgeListContainer'),
+  learnedKnowledgeEmptyState: document.getElementById('learnedKnowledgeEmptyState'),
 
   // Chat View
   chatView: document.getElementById('chatView'),
@@ -2256,6 +2691,7 @@ const ThemeManager = {
 async function initApp() {
   setupEventListeners();
   ThemeManager.init();
+  await KnowledgeLearningEngine.init();
 
   try {
     // 1. Load modules from IndexedDB
@@ -2511,7 +2947,11 @@ async function handleSendMessage() {
 
       removeLoadingIndicator();
       if (result && result.answer) {
-        appendAIMessage(result.answer, result.source);
+        let learnedItem = result.learned || null;
+        if (learnedItem) {
+          KnowledgeLearningEngine.recordLearnedItem(learnedItem);
+        }
+        appendAIMessage(result.answer, result.source, learnedItem);
       } else {
         appendAIMessage('Tidak ada respon yang diterima dari model AI.', currentMod.name);
       }
@@ -2521,18 +2961,26 @@ async function handleSendMessage() {
 
       appendErrorMessageDOM(err.message, query);
 
-      // Graceful offline fallback
+      // Graceful offline fallback with continuous learning
       setTimeout(() => {
+        const offlineLearned = KnowledgeLearningEngine.extractFromPrompt(query);
+        if (offlineLearned) {
+          KnowledgeLearningEngine.recordLearnedItem(offlineLearned);
+        }
         const fallback = AutonomousLearningAI.respond(query, currentMod);
-        appendAIMessage(`[Mode Cadangan Offline]:\n${fallback.answer}`, fallback.source);
+        appendAIMessage(`[Mode Cadangan Offline]:\n${fallback.answer}`, fallback.source, offlineLearned || fallback.learned);
       }, 400);
     }
   } else {
-    // Mode Offline: autonomous reasoning engine
+    // Mode Offline: autonomous reasoning engine with continuous learning from prompt
     setTimeout(() => {
       removeLoadingIndicator();
+      const offlineLearned = KnowledgeLearningEngine.extractFromPrompt(query);
+      if (offlineLearned) {
+        KnowledgeLearningEngine.recordLearnedItem(offlineLearned);
+      }
       const response = AutonomousLearningAI.respond(query, currentMod);
-      appendAIMessage(response.answer, response.source);
+      appendAIMessage(response.answer, response.source, offlineLearned || response.learned);
     }, 350);
   }
 }
@@ -2600,12 +3048,12 @@ function appendUserMessage(text) {
   renderUserMessageDOM(text);
 }
 
-function appendAIMessage(text, source) {
+function appendAIMessage(text, source, learnedItem = null) {
   if (!AppState.chatHistory[AppState.activeModuleId]) {
     AppState.chatHistory[AppState.activeModuleId] = [];
   }
-  AppState.chatHistory[AppState.activeModuleId].push({ role: 'ai', text, source });
-  renderAIMessageDOM(text, source);
+  AppState.chatHistory[AppState.activeModuleId].push({ role: 'ai', text, source, learned: learnedItem });
+  renderAIMessageDOM(text, source, learnedItem);
 }
 
 function formatChatMessage(str) {
@@ -2640,7 +3088,7 @@ function renderUserMessageDOM(text) {
   DOM.chatHistory.scrollTop = DOM.chatHistory.scrollHeight;
 }
 
-function renderAIMessageDOM(text, source) {
+function renderAIMessageDOM(text, source, learnedItem = null) {
   const row = document.createElement('div');
   row.className = 'chat-row ai';
   
@@ -2649,9 +3097,32 @@ function renderAIMessageDOM(text, source) {
     sourceHtml = `<span class="chat-source-tag" onclick="showSourceDetails('${escapeHtml(source)}')">Sumber: ${escapeHtml(source)}</span>`;
   }
 
+  let learnedHtml = '';
+  if (learnedItem && learnedItem.insight) {
+    let catBadge = 'Fakta Baru';
+    if (learnedItem.category === 'preferensi') catBadge = 'Preferensi';
+    else if (learnedItem.category === 'koreksi') catBadge = 'Koreksi';
+    else if (learnedItem.category === 'konsep') catBadge = 'Konsep Baru';
+
+    learnedHtml = `
+      <div class="ai-learned-chip" onclick="openLearnedKnowledgeModal('${escapeHtml(learnedItem.id || '')}')" title="Klik untuk membuka Pusat Memori AI">
+        <span class="ai-learned-icon">💡</span>
+        <div class="ai-learned-content">
+          <div class="ai-learned-header">
+            <span class="ai-learned-title">AI Mempelajari Hal Baru:</span>
+            <span class="ai-learned-badge badge-${escapeHtml(learnedItem.category || 'fakta')}">${escapeHtml(catBadge)}</span>
+          </div>
+          <div class="ai-learned-text">"${escapeHtml(learnedItem.insight)}"</div>
+        </div>
+        <span class="ai-learned-action">Memori ↗</span>
+      </div>
+    `;
+  }
+
   row.innerHTML = `
     <div class="avatar-badge ai">AI</div>
     <div class="chat-bubble ai">
+      ${learnedHtml}
       ${formatChatMessage(text)}
       ${sourceHtml}
     </div>
@@ -3693,7 +4164,108 @@ function setupEventListeners() {
   if (DOM.btnSaveApiConfig) {
     DOM.btnSaveApiConfig.addEventListener('click', handleSaveApiConfig);
   }
+
+  // Learned Memory Modal and Manual Teach Events
+  if (DOM.btnOpenLearnedMemory) {
+    DOM.btnOpenLearnedMemory.addEventListener('click', () => {
+      openModal('modalLearnedKnowledge');
+      KnowledgeLearningEngine.renderModalList();
+    });
+  }
+  if (DOM.btnToggleManualTeach) {
+    DOM.btnToggleManualTeach.addEventListener('click', toggleManualTeachForm);
+  }
+  if (DOM.btnCancelManualTeach) {
+    DOM.btnCancelManualTeach.addEventListener('click', toggleManualTeachForm);
+  }
+  if (DOM.btnSubmitManualTeach) {
+    DOM.btnSubmitManualTeach.addEventListener('click', handleManualTeachSubmit);
+  }
+  if (DOM.btnClearAllKnowledge) {
+    DOM.btnClearAllKnowledge.addEventListener('click', handleClearAllKnowledge);
+  }
+  if (DOM.knowledgeFilterGroup) {
+    DOM.knowledgeFilterGroup.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-chip');
+      if (btn && btn.dataset.filter) {
+        DOM.knowledgeFilterGroup.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        KnowledgeLearningEngine.currentFilter = btn.dataset.filter;
+        KnowledgeLearningEngine.renderModalList();
+      }
+    });
+  }
 }
+
+function toggleManualTeachForm() {
+  const box = document.getElementById('manualTeachBox');
+  if (box) {
+    const isHidden = box.style.display === 'none';
+    box.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+      document.getElementById('teachTopicInput')?.focus();
+    }
+  }
+}
+
+async function handleManualTeachSubmit() {
+  const topicInput = document.getElementById('teachTopicInput');
+  const catInput = document.getElementById('teachCategoryInput');
+  const insightInput = document.getElementById('teachInsightInput');
+
+  const topic = (topicInput?.value || '').trim();
+  const category = catInput?.value || 'fakta';
+  const insight = (insightInput?.value || '').trim();
+
+  if (!insight) {
+    showToast('Masukkan intisari ilmu yang ingin diajarkan ke AI.', 'error');
+    return;
+  }
+
+  await KnowledgeLearningEngine.recordLearnedItem({
+    topic: topic || 'Pengetahuan Mandiri',
+    insight: insight,
+    category: category,
+    sourcePrompt: 'Diajarkan Manual oleh Pengguna'
+  });
+
+  if (topicInput) topicInput.value = '';
+  if (insightInput) insightInput.value = '';
+  toggleManualTeachForm();
+  showToast('Ilmu baru berhasil dicatat dalam memori AI!', 'success');
+}
+
+async function handleClearAllKnowledge() {
+  if (confirm('Apakah Anda yakin ingin mengosongkan semua memori ilmu yang telah dipelajari AI?')) {
+    await KnowledgeLearningEngine.clearAll();
+  }
+}
+
+window.openLearnedKnowledgeModal = function(highlightId) {
+  openModal('modalLearnedKnowledge');
+  KnowledgeLearningEngine.renderModalList();
+  if (highlightId) {
+    setTimeout(() => {
+      const targetCard = document.getElementById(`card_knowledge_${highlightId}`);
+      if (targetCard) {
+        targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetCard.style.borderColor = '#00796b';
+        targetCard.style.boxShadow = '0 0 10px rgba(0, 121, 107, 0.4)';
+      }
+    }, 200);
+  }
+};
+
+window.filterLearnedKnowledge = function(filterCat, btn) {
+  if (DOM.knowledgeFilterGroup) {
+    DOM.knowledgeFilterGroup.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+  }
+  if (btn) btn.classList.add('active');
+  KnowledgeLearningEngine.currentFilter = filterCat;
+  KnowledgeLearningEngine.renderModalList();
+};
+
+window.toggleManualTeachForm = toggleManualTeachForm;
 
 function switchTab(tabName) {
   AppState.currentTab = tabName;
